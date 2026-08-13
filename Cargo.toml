@@ -8,3 +8,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 dirs = "5.0"
 ansi-to-tui = "7"
+
+[[bin]]
+name = "confy"
+path = "src/confy.rs"
