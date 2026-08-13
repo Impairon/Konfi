@@ -1,6 +1,5 @@
 
 <img width="4647" height="1162" alt="bismallah" src="https://github.com/user-attachments/assets/a5b2a66c-4309-4d81-8c4a-56b91b9d5aba" />
-```markdown
 # confy: The Config Manager
  
 
@@ -28,7 +27,7 @@ cd confy/src
 cargo build --release
 cp target/release/confy ~/.local/bin/confy
 ```
-```
+
 *(Make sure `~/.local/bin` is in your `$PATH`)*
 
 ## ⌨️ Usage
