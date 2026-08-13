@@ -23,10 +23,11 @@ Make sure you just have `fzf`
 Build the optimized binary and put it in your local bin:
 
 ```bash
-git clone 
+git clone https://github.com/Impairon/confy.git
 cd confy/src
 cargo build --release
 cp target/release/confy ~/.local/bin/confy
+```
 ```
 *(Make sure `~/.local/bin` is in your `$PATH`)*
 
