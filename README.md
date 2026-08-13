@@ -35,17 +35,17 @@ cp target/release/confy ~/.local/bin/confy
 
 **Create a symlink instantly:**
 ```bash
-configz -l ~/.config/niri/config.kdl -n niri_config
+confy -l ~/.config/niri/config.kdl -n niri_config
 ```
 
 **Open a file directly in your `$EDITOR` (bypasses the TUI completely):**
 ```bash
-configz -o niri_config
+confy -o niri_config
 ```
 
 **Open the TUI and automatically expand a specific folder:**
 ```bash
-configz -o my_folder
+confy -o my_folder
 ```
 
 ### TUI Mode (For when you want to play with your food)
