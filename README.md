@@ -1,4 +1,4 @@
-<img width="4647" height="1162" alt="bismallah" src="https://github.com/user-attachments/assets/691dae48-0711-4367-8ab1-cb27b1a1282a" />
+can you make the image in the very end take the full space in the page or tell me how (<img width="4647" height="1162" alt="bismallah" src="https://github.com/user-attachments/assets/691dae48-0711-4367-8ab1-cb27b1a1282a" />
 
 ```markdown
 # confy: The Config Manager
@@ -63,7 +63,7 @@ configz -o my_folder
 
 ---
 <img width="100%" height="75" alt="cat_line" src="https://github.com/user-attachments/assets/217f58e2-d9f5-4569-b6b5-4e65cf716a56" />
-<svg width="100%" height="75" viewBox="0 0 600 75" version="1.1" xmlns="http://www.w3.org/2000/svg" style="stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 1.5;">
+<svg width="700" height="75" viewBox="0 0 600 75" version="1.1" xmlns="http://www.w3.org/2000/svg" style="stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 1.5;">
     <path transform="matrix(1,0,0,1,92.3579,4.11772)" d="M105.809,48.397C105.809,44.506 102.473,43.931 102.473,33.503" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 1.5px;"/>
     <path transform="matrix(1,0,0,1,92.3579,4.11772)" d="M109.397,38.324L109.397,48.321" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 1.5px;"/>
     <path transform="matrix(1,0,0,1,92.3579,4.11772)" d="M112.883,48.152C112.883,44.717 115.053,40.554 115.053,35.084C115.053,29.613 114.393,24.795 114.216,21.81" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 1.5px;"/>
@@ -75,3 +75,4 @@ configz -o my_folder
     <path transform="matrix(3.96613,0,0,5.89452,-177.012,-336.835)" d="M93.717,66.428L195.647,66.428" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 0.3px;"/>
     <path transform="matrix(1.78906,0,0,2.78204,-166.7,-130.078)" d="M93.717,66.428L195.647,66.428" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 0.64px;"/>
 </svg>
+)
