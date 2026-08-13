@@ -1,8 +1,7 @@
 
 <img width="4647" height="1162" alt="bismallah" src="https://github.com/user-attachments/assets/a5b2a66c-4309-4d81-8c4a-56b91b9d5aba" />
-# confy: The Config Manager
- 
 
+## confy: The Config Manager 
 `confy` is a blazingly fast, single-file Rust TUI for managing symlinks in `~/.configz`. It's inspired by tools like `yazi` and `nix os home manager`, but strictly for your configuration files. No bloat, no unnecessary abstractions. It just sits there, looks sharp, and manages your files.
 
 ## 🐾 The Clowder (Features)
