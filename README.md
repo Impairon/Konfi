@@ -50,15 +50,15 @@ configz -o my_folder
 
 ### TUI Mode (For when you want to play with your food)
 
-| Key | Action | Cat Translation |
-| --- | ------ | --------------- |
-| `j` / `k` / `↑` / `↓` | Navigate | Prowl up and down |
-| `Enter` | Expand folder / Open file | Claim territory or eat the snack |
-| `a` | Add a new symlink | Bring a dead mouse to the config folder |
-| `r` | Rename a symlink | Decide you actually own that mouse |
-| `d` | Delete (press twice) | Bury it in the litter box |
-| `/` | Search | Hunt mode |
-| `q` | Quit | Take a nap |
+| Key | Action | 
+| --- | ------ | 
+| `j` / `k` / `↑` / `↓` | Navigate | 
+| `Enter` | Expand folder / Open file |
+| `a` | Add a new symlink | 
+| `r` | Rename a symlink |
+| `d` | Delete (press twice) |
+| `/` | Search |
+| `q` | Quit |
 
 ---
 <img width="100%" height="75" alt="cat_line" src="https://github.com/user-attachments/assets/cf9afda6-202f-441b-9300-1a9feb0f92ab" />
