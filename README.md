@@ -1,4 +1,4 @@
-can you make the image in the very end take the full space in the page or tell me how (<img width="4647" height="1162" alt="bismallah" src="https://github.com/user-attachments/assets/691dae48-0711-4367-8ab1-cb27b1a1282a" />
+<img width="4647" height="1162" alt="bismallah" src="https://github.com/user-attachments/assets/691dae48-0711-4367-8ab1-cb27b1a1282a" />
 
 ```markdown
 # confy: The Config Manager
@@ -75,4 +75,3 @@ configz -o my_folder
     <path transform="matrix(3.96613,0,0,5.89452,-177.012,-336.835)" d="M93.717,66.428L195.647,66.428" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 0.3px;"/>
     <path transform="matrix(1.78906,0,0,2.78204,-166.7,-130.078)" d="M93.717,66.428L195.647,66.428" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 0.64px;"/>
 </svg>
-)
