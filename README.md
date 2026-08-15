@@ -1,49 +1,36 @@
+Here is the detailed list of the new and refined features in this final **v3.2.0** version of `confy`. 
 
-# Confy just got a huge upgrade and new features:
+I focused heavily on turning the tool into a **Dotfile Operating System**—making it smarter, safer, and completely freeze-proof.
 
-### 🌳 File Tree & Navigation
-*   **Inline Tree View:** Folders expand and collapse directly in the list without needing a separate pane.
-*   **Smart Expansion Memory:** If the filesystem changes externally, the tool refreshes the list but remembers exactly which folders you had open.
-*   **Mouse Support:** Scroll wheel works natively for navigating the file list.
-*   **Hidden Files Toggle:** Press `.` to show/hide hidden files (dotfiles).
+### 🚀 Core Engine & Architecture
+*   **The Monolithic Return:** Reverted from a 6-file module split back to a single, beautifully organized `main.rs`. This eliminates all `crate::` boilerplate and allows the `App` struct to use clean `&mut self` references for all state changes.
 
-### 📁 File & Folder Operations
-*   **Add Symlink (`a`):** Two-step prompt for Path and Alias. Supports path-aware naming (e.g., typing `work/niri.kdl` creates the `work/` folder if it doesn't exist).
-*   **Tab Completion (`Tab`):** Context-aware `fzf` integration. Press `Tab` while typing a path to search the directory you are currently typing in.
-*   **Create Folder (`f`):** Instantly create a new folder at the root of `~/.configz`.
-*   **Rename (`r`):** Rename files or folders. Also supports path-aware naming to move files via rename.
-*   **Cut & Paste (`c` / `p`):** Cut a file/folder, navigate, and press `p` to paste. Safely prevents pasting a folder into itself.
-*   **Yank & Paste (`y` / `p`):** Copy a file/folder, navigate, and press `p` to duplicate it. Uses `cp -r` for directories.
-*   **Safe Delete (`d`):** Press `d` once to arm, press `d` again to confirm. Safely handles symlinks, directories, and files.
+*   **Silent External Commands:** Every single external command (`zip`, `unzip`, `git`, `bat`, `chafa`, `fzf`) is now strictly wrapped in `Stdio::null()` and `Stdio::piped()`. They can no longer print ANSI escape codes or progress bars that corrupt the Ratatui alternate screen.
 
-### ⏳ Smart Version Control
-*   **Content-Hashing Snapshots:** Versions are saved *only* when you close your editor, and *only* if the file's contents actually changed (using Rust's `DefaultHasher`).
-*   **Jujutsu-style Timeline (`v`):** View a clean, chronological timeline of file versions directly in the preview pane.
-*   **Surgical Restores (`Enter`):** Restore a specific file to a previous state. Symlinks are protected during restoration so your config structure isn't broken.
-*   **Configurable Limits (`-v`):** Set how many versions to keep (default 4). Old snapshots are automatically cleaned up.
+### 📦 Smart Deployment Flow
+*   **Interactive `y/n` Deploy Confirmation:** Pressing `D` on a `.zip` file now runs a Dry Run directly in the preview pane. If successful, the bottom bar changes to: `"Deploy (y=apply, n=cancel)"`. Pressing `y` executes the deployment with timestamped backups; pressing `n` or `Esc` cancels it.
+*   **Native Password Prompting:** If you press `D` on an encrypted `.zip`, `unzip` fails instantly. `confy` catches the `PASSWORD_REQUIRED` error and dynamically transforms the bottom bar into a password input field: `"🔒 enter passwd (esc=cancel)"`. Once you type the password and hit `Enter`, it re-runs the dry run seamlessly.
+*   **Conflict-Aware Backups:** During `--apply`, `confy` hashes the target file on the new machine and compares it to the file inside the archive. If the hashes match (identical content), it skips the file completely—no unnecessary `.bak` files are created. If they differ, it creates a timestamped backup (e.g., `config.kdl.bak_20231024_153005`) before overwriting.
 
-### 🔒 Sudo & Shell Integration
-*   **Sudo suuport:** If a file needs root permissions, a password prompt appears in the bottom bar. Empty password = view-only mode. Saved passwords (`-s`) are tried silently first.
-*   **Shell Mode (`!`):** Run shell commands directly against the highlighted file. The output is captured and displayed in a "pinned" preview pane with a header and footer, so you can read long outputs without leaving the TUI. Press `Esc` to return to normal preview.
-*   **Sudo Password Manager (`-s`):** Save or delete your sudo password via CLI (enforced `0600` permissions for security).
+### ⏳ Version Control & History
+*   **Content-Hashing Snapshots:** Snapshots are *only* taken when a file's contents actually change. It uses Rust's `DefaultHasher` to compare the current file against the latest snapshot. No disk space is wasted on empty edits.
+*   **Version Diff View:** In Version Mode (`v`), press `d` to view a colored `diff` (using `diff --color=always -u`) between the selected historical version and your current file. The output is cleanly rendered in the preview pane.
+*   **Symlink-Safe Restores:** When restoring a previous version, `confy` checks if the destination is a symlink. If it is, it writes *through* the symlink, ensuring your real config file is updated without breaking your folder structure.
 
-### 🛡️ Security & Robustness
-*   **Path Traversal Protection (`is_path_safe`):** All add, rename, and folder creation actions are sanitized. You cannot use `../../` to escape the `~/.configz` directory.
-*   **Symlink Target Viewer:** If a file is a symlink, the preview pane displays exactly where it points (e.g., `Symlink -> /home/user/.config/niri/config.kdl`).
-*   **Binary File Protection:** Uses `bat` for syntax highlighting, but intercepts binary file warnings to prevent terminal corruption.
+### 📝 Persistent State & Metadata
+*   **Bookmarks (`★`):** Press `b` to bookmark a file. Bookmarks are saved permanently to `~/.confy_state.json` and survive terminal restarts.
+*   **File Notes (`📝`):** Press `n` to write a note for a file (e.g., "Laptop only", "Needs root"). Notes appear pinned to the top of the preview pane in yellow text.
+*   **Recent Files (MRU):** The last 5 files you edited are saved to state. Press `R` (Shift+R) to open an `fzf` popup of recent files and instantly jump to them.
 
-### 🎨 UI, Theming & Quality of Life
-*   **Terminal Theme Adaptation:** Detects `COLORTERM` to use Truecolor (Catppuccin Mocha) or falls back gracefully to ANSI 256/Standard colors. Matches your terminal perfectly.
-*   **Help Modal (`?`):** A clean, centered popup lists all keybindings so the bottom bar stays uncluttered.
-*   **Dynamic Cats:** The bottom bar features a kitty `ฅ^•ﻌ•^ฅ` that changes expressions based on the mode (e.g., holding scissors `✂️` when cutting, a clipboard `📋` when yanking, a clock `⏳` when viewing versions).
-*   **Escape any operation:** Now a `ESC` option is available for operations you do so you can aport it 
-*   **Fixed Column Widths:** The file list is locked to 45 characters to ensure the UI never squishes or breaks on smaller terminals.
+### ✂️ File Operations & UX
+*   **Visual Select Mode (`V`):** Enter a mode where moving `j`/`k` automatically highlights files (`✓`). Pressing `Esc` clears all selections, pressing `V` again exits the mode but keeps your selections.
+*   **Dynamic Cyber-Cat:** The bottom bar cat `ฅ^•ﻌ•^ฅ` changes expressions based on what you're doing. It holds scissors `✂️` when cutting, a clipboard `📋` when yanking, and sparkles `✨` when files are selected.
+*   **Context-Aware Path Safety:** The `is_path_safe` function runs on all Add, Rename, and Folder Creation actions. It canonicalizes paths to block `../../` directory traversal attacks, ensuring you never accidentally escape the `~/.confy` sandbox.
+*   **Smart Symlink Paste:** Cut/Yank/Paste operations safely prevent pasting a folder into itself by comparing canonical absolute paths.
 
-### ⌨️ Command Line Interface (CLI)
-*   `confy` : Launch the TUI.
-*   `confy -l <path> -n <name>` : Create a symlink instantly from the terminal (creates parent folders).
-*   `confy -o <file/folder>` : Open a file in `$EDITOR` or launch the TUI with a folder expanded.
-*   `confy -v <number>` : Set version limit.
-*   `confy -s "<password>"` : Save sudo password.
-*   `confy -s ""` : Delete saved sudo password.
-*   `confy -h` : Show help.
+### ⌨️ CLI Utilities
+*   `confy -d <archive.zip> [--apply] [--pass <password>]`: Deploy archives from the command line.
+*   `confy discover`: Auto-discovers and links famous dotfiles (Hyprland, Niri, Kitty, bashrc, etc.).
+*   `confy doctor`: Checks for missing dependencies (`bat`, `chafa`, `fzf`, `ffmpeg`, `zip`, `unzip`, `diff`) and scans for broken symlinks.
+*   `confy git-export`: Instantly initializes a git repo in `~/.confy` and commits everything for pushing to GitHub.
+*   `confy -s "<password>"`: Securely saves your sudo password (enforces `0600` permissions) so you can edit root-owned files without leaving the TUI.
