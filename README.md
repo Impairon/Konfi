@@ -1,4 +1,4 @@
-                                                       ﷽
+                                               ﷽
 
 ## confy: The Config Manager 
 `confy` is a blazingly fast, single-file Rust TUI for managing symlinks in `~/.configz`. It's inspired by tools like `yazi` and `nix os home manager`, but strictly for your configuration files. No bloat, no unnecessary abstractions. It just sits there, looks sharp, and manages your files.
