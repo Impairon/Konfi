@@ -1,5 +1,4 @@
-
-                                          ﷽
+                                               ﷽
 
 ## confy: The Config Manager 
 `confy` is a blazingly fast, single-file Rust TUI for managing symlinks in `~/.configz`. It's inspired by tools like `yazi` and `nix os home manager`, but strictly for your configuration files. No bloat, no unnecessary abstractions. It just sits there, looks sharp, and manages your files.
@@ -61,8 +60,8 @@ confy -o my_folder
 | `q` | Quit |
 
 ---
-<img width="100%" height="75" alt="cat_line" src="https://github.com/user-attachments/assets/cf9afda6-202f-441b-9300-1a9feb0f92ab" />
-<svg width="600" height="75" viewBox="0 0 600 75" version="1.1" xmlns="http://www.w3.org/2000/svg" style="stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 1.5;">
+<img width="100%" alt="cat_line" src="..."/>
+<svg viewBox="0 0 600 75" version="1.1" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="display:block; width:100%; height:75px; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 1.5;">
     <path transform="matrix(1,0,0,1,92.3579,4.11772)" d="M105.809,48.397C105.809,44.506 102.473,43.931 102.473,33.503" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 1.5px;"/>
     <path transform="matrix(1,0,0,1,92.3579,4.11772)" d="M109.397,38.324L109.397,48.321" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 1.5px;"/>
     <path transform="matrix(1,0,0,1,92.3579,4.11772)" d="M112.883,48.152C112.883,44.717 115.053,40.554 115.053,35.084C115.053,29.613 114.393,24.795 114.216,21.81" style="fill: none; stroke: rgb(110, 108, 126); stroke-width: 1.5px;"/>
