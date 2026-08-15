@@ -10,8 +10,5 @@ dirs = "5.0"
 ansi-to-tui = "7"
 
 [[bin]]
-name = "second"
-path = "src/second.rs"
-[[bin]]
-name = "main"
-path = "src/main.rs"
+name = "confy"
+path = "src/confy.rs"
