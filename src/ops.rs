@@ -33,6 +33,32 @@ pub fn is_path_safe(base: &Path, target: &Path) -> bool {
     suffix.iter().rev().fold(resolved, |p, part| p.join(part)).starts_with(&cb)
 }
 
+// ponytail: replaces 16+ scattered path_name() calls
+pub fn path_name(p: &Path) -> String {
+    p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+}
+
+// ponytail: replaces 25+ scattered .to_string_lossy().to_string() calls
+pub fn path_to_string(p: &Path) -> String {
+    p.to_string_lossy().to_string()
+}
+
+pub fn path_exists(p: &Path) -> bool {
+    p.exists() || p.symlink_metadata().is_ok()
+}
+
+pub fn ensure_parent(p: &Path) -> std::io::Result<()> {
+    if let Some(parent) = p.parent() { fs::create_dir_all(parent)? } Ok(())
+}
+
+pub fn load_json<T: serde::de::DeserializeOwned>(p: &Path) -> Option<T> {
+    fs::read_to_string(p).ok().and_then(|s| serde_json::from_str(&s).ok())
+}
+
+pub fn load_json_or<T: serde::de::DeserializeOwned + Default>(p: &Path) -> T {
+    load_json(p).unwrap_or_default()
+}
+
 pub fn remove_entry(path: &Path) -> std::io::Result<()> {
     let meta = fs::symlink_metadata(path)?;
     if meta.file_type().is_symlink() || meta.is_file() { fs::remove_file(path) }
@@ -85,6 +111,8 @@ pub fn load_trash_metadata(trash_path: &Path) -> Option<TrashMetadata> {
 }
 pub fn remove_trash_metadata(trash_path: &Path) { let _ = fs::remove_file(trash_metadata_path(trash_path)); }
 pub fn now_secs() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() }
+pub fn now_nanos() -> u128 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() }
+pub fn now_millis() -> u128 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() }
 
 pub fn trash_deleted_at(trash_path: &Path) -> u64 {
     if let Some(meta) = load_trash_metadata(trash_path) { return meta.deleted_at; }
@@ -342,7 +370,7 @@ pub struct HookContext { pub confy_dir: PathBuf, pub file: PathBuf, pub alias: S
 
 impl HookContext {
     pub fn new(confy_dir: &Path, file: &Path, op: &str, success: bool, tags: &HashMap<String, HashSet<String>>) -> Self {
-        let alias = file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let alias = path_name(&file);
         let ts = tags.get(&alias).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>().join(",");
         Self { confy_dir: confy_dir.to_path_buf(), file: file.to_path_buf(), alias, op: op.to_string(), tags: ts, hostname: hostname(), success }
     }
@@ -438,7 +466,7 @@ pub fn take_snapshot(confy_dir: &Path, history_dir: &Path, hooks: &ConfyHooks, s
                         changed = true;
                     }
                     let dest = sd.join(rel);
-                    if let Some(p2) = dest.parent() { let _ = fs::create_dir_all(p2); }
+                    ensure_parent(&dest)?;
                     fs::copy(&p, &dest)?;
                     run_hook(hooks, settings, confy_dir, "post_save_version", &p, "save_version", true, tags);
                 }
@@ -481,7 +509,7 @@ pub fn git_clone(confy_dir: &Path, source: &str, destination: Option<&Path>) -> 
     fs::create_dir_all(confy_dir)?;
     if let Some(path) = destination {
         if !path.starts_with(confy_dir) { return Err(ConfyError::PathTraversal(path.to_path_buf())); }
-        if path.exists() || path.symlink_metadata().is_ok() {
+        if path_exists(&path) {
             return Err(ConfyError::InvalidInput(format!("clone destination already exists: {}", path.display())));
         }
     }
@@ -523,8 +551,8 @@ pub fn create_archive(confy_dir: &Path, files: &[(String, PathBuf)], password: O
     if password.is_some_and(|p| !p.is_empty()) {
         return Err(ConfyError::InvalidInput("archive passwords are not supported yet; refusing to create an unencrypted archive".into()));
     }
-    let ap = confy_dir.join(format!("confy_backup_{}.zip", SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis()));
-    let temp_ap = confy_dir.join(format!(".confy_backup_{}.zip.tmp", SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos()));
+    let ap = confy_dir.join(format!("confy_backup_{}.zip", now_millis()));
+    let temp_ap = confy_dir.join(format!(".confy_backup_{}.zip.tmp", now_nanos()));
     let mut temp_guard = TempFileGuard(temp_ap.clone());
     let file = fs::File::create(&temp_ap)?;
     let mut zip = zip::ZipWriter::new(file);
@@ -560,11 +588,9 @@ pub fn create_archive(confy_dir: &Path, files: &[(String, PathBuf)], password: O
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DeployIndex { pub last_deployed_hash: u64, pub last_deployed_at: String }
 
-pub struct DeploySummary { pub output: String, pub updated: u32, pub conflicts: u32 }
+pub struct DeploySummary { pub output: String, pub new: u32, pub updated: u32, pub skipped: u32, pub conflicts: u32 }
 
-pub fn load_deploy_index(p: &Path) -> HashMap<String, DeployIndex> {
-    std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
-}
+pub fn load_deploy_index(p: &Path) -> HashMap<String, DeployIndex> { load_json_or(p) }
 pub fn save_deploy_index(map: &HashMap<String, DeployIndex>, p: &Path) -> Result<()> {
     atomic_write(p, &serde_json::to_vec_pretty(map)?)
 }
@@ -576,7 +602,7 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
     let file = fs::File::open(archive)?;
     let mut zip_archive = zip::ZipArchive::new(file)?;
 
-    let td = confy_dir.join(".assets/.tmp").join(format!("deploy_{}_{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos(), std::process::id()));
+    let td = confy_dir.join(".assets/.tmp").join(format!("deploy_{}_{}", now_nanos(), std::process::id()));
     let _g = TempDirGuard(td.clone());
     fs::create_dir_all(td.parent().ok_or_else(|| ConfyError::Deploy("invalid temporary directory".into()))?)?;
     fs::create_dir_all(&td)?;
@@ -590,7 +616,7 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
         let name = zip_file.enclosed_name().ok_or_else(|| ConfyError::PathTraversal(zip_file.name().into()))?;
         let outpath = td.join(&name);
         if zip_file.is_dir() { fs::create_dir_all(&outpath)?; continue; }
-        if let Some(p) = outpath.parent() { fs::create_dir_all(p)?; }
+        ensure_parent(&outpath)?;
         let mut outfile = fs::File::create(&outpath)?;
         let mut buf = [0u8; 65536];
         let mut written: u64 = 0;
@@ -615,9 +641,9 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
     let mut output = format!("\x1b[1;36m\u{f019}  Deployment Plan {}\x1b[0m\n\x1b[90m────────────────\x1b[0m\n", if apply { "[APPLY]" } else { "[DRY RUN]" });
     let home = dirs::home_dir().ok_or_else(|| ConfyError::NotFound("home dir".into()))?;
     let assets_root = confy_dir.join(".assets");
-    let bd = confy_dir.join(".assets/.deployments").join(format!("{}_{}",
+    let bd = confy_dir.join(".assets/.deployments").join(format!("{}_{}", 
         archive.file_name().unwrap_or_default().to_string_lossy(),
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis()));
+        now_millis()));
     if apply { fs::create_dir_all(&bd)?; }
     let mut sum = (0u32, 0u32, 0u32, 0u32); // new, updated, skipped, conflicts
 
@@ -658,7 +684,7 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
             output.push_str(&format!("  \x1b[35m[SCRIPT] {}run:\x1b[0m {}\n", if apply && allow_scripts { "" } else { "would not " }, s));
         }
 
-        let tp_exists = tp.exists() || tp.symlink_metadata().is_ok();
+        let tp_exists = path_exists(&tp);
         if tp_exists && tp.symlink_metadata()?.file_type().is_symlink() {
             output.push_str(&format!("\n[ERROR] Refusing to overwrite symlink target: {}\n", tp.display()));
             continue;
@@ -671,7 +697,7 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
                 output.push_str("  \x1b[33m[UPDATE]\x1b[0m\n"); sum.1 += 1;
                 if apply {
                     let bak = bd.join(&entry.alias);
-                    if let Some(p) = bak.parent() { fs::create_dir_all(p)?; }
+                    ensure_parent(&bak)?;
                     let base_path = base_dir.join(&entry.alias);
                     let tp_is_regular = tp.is_file() && tp.symlink_metadata().map(|m| !m.file_type().is_symlink()).unwrap_or(false);
                     let mut merged = false; let mut conflicted = false; let mut attempted_merge = false;
@@ -698,7 +724,7 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
                             if is_dir_real { copy_dir_recursive(&tp, &bak)?; }
                             else if fs::copy(&tp, &bak).is_err() { fs::rename(&tp, &bak)?; }
                         }
-                        if tp.exists() || tp.symlink_metadata().is_ok() { remove_entry(&tp)?; }
+                        if !path_exists(&tp) { remove_entry(&tp)?; }
                         if let Some(parent) = tp.parent() { fs::create_dir_all(parent)?; }
                         if src_path.is_dir() { copy_dir_recursive(&src_path, &tp)?; }
                         else { fs::copy(&src_path, &tp)?; }
@@ -755,7 +781,7 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
     output.push_str(&format!("\nSummary: {} New, {} Updated, {} Skipped, {} Conflicts\n", sum.0, sum.1, sum.2, sum.3));
     if apply { output.push_str("\n\x1b[1;32m✅ Deployed!\x1b[0m\n"); }
     else { output.push_str("\n\x1b[1;33m⚠️ Dry run. Press 'e' to browse archive, 'y' to apply.\x1b[0m\n"); }
-    Ok(DeploySummary { output, updated: sum.1, conflicts: sum.3 })
+    Ok(DeploySummary { output, new: sum.0, updated: sum.1, skipped: sum.2, conflicts: sum.3 })
 }
 
 pub fn list_archive_contents(archive: &Path) -> String {
@@ -788,11 +814,12 @@ pub fn list_archive_contents(archive: &Path) -> String {
 // ============ Git ============
 
 pub fn git_export(cd: &Path) -> Result<String> {
+    crate::secrets::ensure_root_layout(cd)?;
     if std::env::var_os("CONFY_ALLOW_SECRETS").is_none() {
         crate::secrets::check_git_blockers(cd)?;
     }
     let gi = cd.join(".gitignore");
-    const REQ: &str = ".assets/.trash/\n.assets/.deployments/\n";
+    const REQ: &str = ".assets/.trash/\n.assets/.deployments/\n.assets/.keys/\n.assets/.tmp/\n.assets/.state.json\n";
     let cur = fs::read_to_string(&gi).unwrap_or_default();
     if !cur.contains(".assets/.trash") {
         let mut n = cur.clone();

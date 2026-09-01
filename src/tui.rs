@@ -356,7 +356,7 @@ fn draw(f: &mut Frame, app: &mut App, theme: &Theme) {
         InputMode::AddingTag => draw_input(f, app, theme, " Add Tag (Enter=save, Esc=cancel) "),
         InputMode::Renaming => draw_input(f, app, theme, " Rename (Enter=save, Esc=cancel) "),
         InputMode::SudoPrompt => draw_input(f, app, theme, " 🔒 Sudo Password (Ctrl+H show/hide, Enter=submit) "),
-        InputMode::Shell => draw_input(f, app, theme, " sh> ({f}=file, !alias, Tab=complete, Enter=run) "),
+        InputMode::Shell => draw_input(f, app, theme, " sh> ({f}=file, !alias, Tab=complete, Enter=run, exit=close) "),
         InputMode::AddingThemePath => draw_input(f, app, theme, " Theme file path (Tab=fzf, Enter=next) "),
         InputMode::AddingThemeName => draw_input(f, app, theme, " Theme name (Enter=save, Esc=cancel) "),
         _ => {}
@@ -383,10 +383,10 @@ fn draw(f: &mut Frame, app: &mut App, theme: &Theme) {
 fn draw_file_list(f: &mut Frame, app: &mut App, theme: &Theme, area: Rect) {
     let display = app.current_nodes();
     let items: Vec<ListItem> = display.iter().map(|node| {
-        let name = node.path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = ops::path_name(&node.path);
         let size_str = if app.state_data.settings.show_sizes { node.size.map(|s| ops::format_size(s)).unwrap_or_default() } else { String::new() };
         let is_sel = app.selected_nodes.contains(&node.path);
-        let is_book = node.path.strip_prefix(&app.confy_dir).map(|r| app.state_data.bookmarks.contains(&r.to_string_lossy().to_string())).unwrap_or(false);
+        let is_book = node.path.strip_prefix(&app.confy_dir).map(|r| app.state_data.bookmarks.contains(&ops::path_to_string(&r))).unwrap_or(false);
         let is_modified = app.modified_cache.contains(&node.path);
 
         let is_sym = node.path.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false);
@@ -415,7 +415,7 @@ fn draw_file_list(f: &mut Frame, app: &mut App, theme: &Theme, area: Rect) {
         spans.push(Span::styled(format!("{:>7}", size_str), Style::default().fg(theme.muted)));
         ListItem::new(Line::from(spans))
     }).collect();
-    let dir_name = app.confy_dir.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let dir_name = ops::path_name(&app.confy_dir);
     let list_title = if app.input_mode == InputMode::Search { format!(" Search: {} ", app.input) }
         else if app.bookmarks_only { format!(" {} (Bookmarks: {}) ", dir_name, display.len()) }
         else if app.host_filter { format!(" {} (Host filter: {}) ", dir_name, display.len()) }
@@ -468,7 +468,7 @@ fn draw_info(f: &mut Frame, app: &App, theme: &Theme) {
     let mut lines: Vec<Line> = Vec::new();
     if let Some(node) = app.selected_node_ref() {
         let path = &node.path;
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = ops::path_name(path);
         lines.push(Line::from(vec![Span::styled(format!("  {}", name), Style::default().fg(theme.text).add_modifier(Modifier::BOLD))]));
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled("  Path:       ", Style::default().fg(theme.muted)), Span::styled(path.display().to_string(), Style::default().fg(theme.text))]));
@@ -497,7 +497,7 @@ fn draw_info(f: &mut Frame, app: &App, theme: &Theme) {
             }
         }
         if let Ok(rel) = path.strip_prefix(&app.confy_dir) {
-            let rs = rel.to_string_lossy().to_string();
+            let rs = ops::path_to_string(&rel);
             if let Some(note) = app.state_data.notes.get(&rs) {
                 lines.push(Line::from(""));
                 lines.push(Line::from(vec![Span::styled(format!("  📝 Note: {}", note), Style::default().fg(Color::Yellow))]));
@@ -530,7 +530,7 @@ fn draw_trash(f: &mut Frame, app: &mut App, theme: &Theme) {
         .border_style(Style::default().fg(theme.accent))
         .title(Span::styled(title, Style::default().add_modifier(Modifier::BOLD).fg(theme.text)));
     let items: Vec<ListItem> = app.trash_items.iter().map(|p| {
-        let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = ops::path_name(&p);
         let name: String = name.chars().take(34).collect();
         let left = ops::trash_time_left(p, days);
         let (label, color) = match left {
@@ -598,6 +598,57 @@ fn all_keys_for(app: &App, kb: &KeyBind) -> String {
     if ks.is_empty() { "unbound".into() } else { ks.join("/") }
 }
 
+fn draw_key_picker(f: &mut Frame, app: &mut App, theme: &Theme) {
+    let area = centered_rect(65, 60, f.size());
+    f.render_widget(Clear, area);
+    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.accent))
+        .title(Span::styled(" Key Picker ", Style::default().add_modifier(Modifier::BOLD).fg(theme.text)));
+    let inner = block.inner(area);
+    let store = crate::secrets::load_key_store(&app.confy_dir);
+    let keys = if app.key_picker_group { store.generated } else { store.shared };
+    let items: Vec<ListItem> = keys.iter().map(|k| {
+        ListItem::new(Line::from(vec![
+            Span::styled(format!(" {} ", if app.key_picker_group { "g" } else { "s" }), Style::default().fg(theme.accent)),
+            Span::styled(k.name.clone(), Style::default().fg(theme.text)),
+        ]))
+    }).collect();
+    let list_area = Layout::default().direction(Direction::Vertical).constraints([Constraint::Min(1), Constraint::Length(1)]).split(inner);
+    f.render_stateful_widget(List::new(items).highlight_symbol("▶ ").highlight_style(theme.highlight), list_area[0], &mut app.key_picker_state);
+    f.render_widget(Paragraph::new(" s/shared · g/generated · Enter copy · Esc close ").style(Style::default().fg(theme.muted)), list_area[1]);
+    f.render_widget(block, area);
+}
+
+fn handle_key_picker(app: &mut App, key: event::KeyEvent) {
+    match key.code {
+        KeyCode::Esc => { app.input_mode = InputMode::Normal; }
+        KeyCode::Char('s') => { app.key_picker_group = false; app.key_picker_state.select(Some(0)); }
+        KeyCode::Char('g') => { app.key_picker_group = true; app.key_picker_state.select(Some(0)); }
+        KeyCode::Enter => {
+            let store = crate::secrets::load_key_store(&app.confy_dir);
+            let keys = if app.key_picker_group { store.generated } else { store.shared };
+            if let Some(i) = app.key_picker_state.selected() { if let Some(k) = keys.get(i) { ops::copy_to_clipboard(&k.key); app.set_status(format!("Copied {} to clipboard.", k.name)); } }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            let store = crate::secrets::load_key_store(&app.confy_dir);
+            let n = if app.key_picker_group { store.generated.len() } else { store.shared.len() };
+            if n > 0 {
+                let cur = app.key_picker_state.selected().unwrap_or(0);
+                app.key_picker_state.select(Some((cur + 1).min(n - 1)));
+            }
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            let store = crate::secrets::load_key_store(&app.confy_dir);
+            let n = if app.key_picker_group { store.generated.len() } else { store.shared.len() };
+            if n > 0 {
+                let cur = app.key_picker_state.selected().unwrap_or(0);
+                app.key_picker_state.select(Some(cur.saturating_sub(1).min(n - 1)));
+            }
+        }
+        _ => {}
+    }
+}
+
 fn draw_keybinds(f: &mut Frame, app: &mut App, theme: &Theme) {
     let area = centered_rect(65, 70, f.size());
     f.render_widget(Clear, area);
@@ -647,7 +698,7 @@ fn status_bar(app: &App) -> (&'static str, String) {
         InputMode::Search => (" Search (Enter=Open, Esc=cancel) ", app.input.clone()),
         InputMode::VersionSelect => (" Version (Enter=Restore, d=Diff, Esc=Cancel) ", String::new()),
         InputMode::SudoPrompt => (" 🔒 Sudo (Ctrl+H, Enter=submit, Esc=cancel) ", if app.hide_password { "*".repeat(app.input.chars().count()) } else { app.input.clone() }),
-        InputMode::Shell => (" sh> ({f}=file, !alias, Tab=complete, Enter=run, Esc=cancel) ", app.input.clone()),
+        InputMode::Shell => (" sh> ({f}=file, !alias, Tab=complete, Enter=run, exit=close, Esc=cancel) ", app.input.clone()),
         InputMode::Help => (" Help (↑↓ line, ←→ page, g/Home top, End bottom, Esc close) ", String::new()),
         InputMode::VisualSelect => (" Visual Select ", "j/k move+toggle | Space toggle | Esc finish".into()),
         InputMode::DeployConfirm => (" Deploy (e=browse, y=apply, n=cancel) ", String::new()),
@@ -668,6 +719,7 @@ fn status_bar(app: &App) -> (&'static str, String) {
         InputMode::KeybindMenu => (" Keybinds ([Space]=Rebind, [a]=Add, [r]=Reset, [R]=Factory, [u]=Undo, [Esc]) ", String::new()),
         InputMode::KeybindCapture => (" Press a key to bind... (Esc=cancel) ", String::new()),
         InputMode::AddCustomBind => (" !command or /path (Enter=next, Esc=back) ", app.input.clone()),
+        InputMode::KeyPicker => (" Key Picker (s/shared · g/generated · Enter copy · Esc close) ", String::new()),
     }
 }
 
@@ -884,6 +936,7 @@ fn draw_settings(f: &mut Frame, app: &mut App, theme: &Theme) {
             SettingAction::ToggleHooks => ("Hooks Enabled", on(s.enable_hooks).into()),
             SettingAction::EditGlobalHooks => ("Edit Global Hooks", "Open Menu".into()),
             SettingAction::EditKeybinds => ("Edit Keybinds", "Open Menu".into()),
+            SettingAction::ToggleTerminalWindow => ("New Terminal Window", on(s.open_terminal_in_new_window).into()),
             SettingAction::OpenTrash => ("Open Trash", "TUI Manager".into()),
             SettingAction::CycleTrashRetention => {
                 let d = s.trash_retention_days;
@@ -1011,6 +1064,7 @@ fn handle_key(app: &mut App, terminal: &mut Tui, key: event::KeyEvent) -> bool {
         InputMode::KeybindMenu => { handle_keybind_menu(app, key); false }
         InputMode::KeybindCapture => { handle_keybind_capture(app, key); false }
         InputMode::AddCustomBind => { handle_add_custom_bind(app, key); false }
+        InputMode::KeyPicker => { handle_key_picker(app, key); false }
         InputMode::DeployConfirm => { handle_deploy_confirm(app, key); false }
     }
 }
@@ -1100,6 +1154,7 @@ fn handle_normal(app: &mut App, _terminal: &mut Tui, key: event::KeyEvent) -> bo
         KeyBind::OpenServices => app.enter_services_menu(),
         KeyBind::JumpList => app.toggle_jump_list(),
         KeyBind::ClearScreen => app.needs_clear = true,
+        KeyBind::ToggleTerminalPreview => app.toggle_preview_terminal(),
         KeyBind::Custom(cmd) => app.run_custom_bind(&cmd),
     }
     false
@@ -1173,10 +1228,19 @@ fn handle_sudo_prompt(app: &mut App, key: event::KeyEvent) {
 fn handle_shell(app: &mut App, key: event::KeyEvent) {
     match key.code {
         KeyCode::Enter => app.run_shell_input(std::time::Duration::from_secs(600)),
-        KeyCode::Esc => { app.input_mode = InputMode::Normal; app.input.clear(); }
+        KeyCode::Esc => { app.input_mode = InputMode::Normal; app.input.clear(); app.preview_pinned = false; app.update_preview(); }
         KeyCode::Tab => complete_path_input(app),
         KeyCode::Backspace => { app.input.pop(); }
-        KeyCode::Char(c) if key.modifiers.is_empty() => push_char(app, c),
+        KeyCode::Char(c) if key.modifiers.is_empty() => {
+            if app.input == "exit" || app.input == "quit" {
+                app.input_mode = InputMode::Normal;
+                app.preview_pinned = false;
+                app.input.clear();
+                app.update_preview();
+            } else {
+                push_char(app, c);
+            }
+        }
         _ => {}
     }
 }
@@ -1594,7 +1658,7 @@ fn complete_path_input(app: &mut App) {
     let base = if dir_part.is_empty() { PathBuf::from(".") } else { ops::expand_tilde(&dir_part) };
     let Ok(rd) = std::fs::read_dir(&base) else { return };
     let mut matches: Vec<String> = rd.flatten()
-        .map(|e| e.file_name().to_string_lossy().to_string())
+        .map(|e| ops::path_to_string(&e.path()))
         .filter(|n| n.starts_with(&prefix))
         .collect();
     matches.sort();

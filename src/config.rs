@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::error::Result;
+use crate::ops;
 
 // ============ Keybinds ============
 
@@ -13,7 +14,7 @@ pub enum KeyBind {
     Expand, Collapse, AddSymlink, AddFolder, Rename, Delete, Cut, Paste, Chmod,
     QuickMove, ToggleBookmark, FilterBookmarks, ToggleHidden, AddNote, AddHostTag,
     OpenSettings, OpenHooks, OpenRoots, SelectEditor, Undo, FileInfo, GitPush,
-    ToggleSelection, VisualSelect, Archive, Shell, Search, Help, ToggleHostFilter,
+    ToggleSelection, VisualSelect, Archive, Shell, ToggleTerminalPreview, Search, Help, ToggleHostFilter,
     OpenServices, GotoPrefix, EditFile, JumpList, ClearScreen,
     Custom(String),
 }
@@ -38,6 +39,7 @@ impl KeyBind {
             KeyBind::FileInfo => "File info".into(), KeyBind::GitPush => "Git push".into(),
             KeyBind::ToggleSelection => "Toggle selection".into(), KeyBind::VisualSelect => "Visual select mode".into(),
             KeyBind::Archive => "Archive selected".into(), KeyBind::Shell => "Shell command".into(),
+            KeyBind::ToggleTerminalPreview => "Toggle preview terminal".into(),
             KeyBind::Search => "Search".into(), KeyBind::Help => "Help".into(),
             KeyBind::ToggleHostFilter => "Filter by hostname".into(), KeyBind::OpenServices => "Systemd services".into(),
             KeyBind::GotoPrefix => "Goto prefix (gg)".into(), KeyBind::EditFile => "Edit file / Open dir".into(),
@@ -57,7 +59,7 @@ impl KeyBind {
             KeyBind::FilterBookmarks, KeyBind::ToggleHidden, KeyBind::AddNote, KeyBind::AddHostTag,
             KeyBind::OpenSettings, KeyBind::OpenHooks, KeyBind::OpenRoots, KeyBind::SelectEditor,
             KeyBind::Undo, KeyBind::FileInfo, KeyBind::GitPush, KeyBind::ToggleSelection,
-            KeyBind::VisualSelect, KeyBind::Archive, KeyBind::Shell, KeyBind::Search, KeyBind::Help,
+            KeyBind::VisualSelect, KeyBind::Archive, KeyBind::Shell, KeyBind::ToggleTerminalPreview, KeyBind::Search, KeyBind::Help,
             KeyBind::ToggleHostFilter, KeyBind::OpenServices, KeyBind::GotoPrefix, KeyBind::EditFile,
             KeyBind::JumpList, KeyBind::ClearScreen,
         ]
@@ -107,6 +109,8 @@ pub fn default_keymap() -> KeyMap {
     m.insert("V".into(), KeyBind::VisualSelect);
     m.insert("z".into(), KeyBind::Archive);
     m.insert("!".into(), KeyBind::Shell);
+    m.insert("T".into(), KeyBind::ToggleTerminalPreview);
+    m.insert("K".into(), KeyBind::Custom("keys".into()));
     m.insert("/".into(), KeyBind::Search);
     m.insert("?".into(), KeyBind::Help);
     m.insert("F".into(), KeyBind::ToggleHostFilter);
@@ -126,7 +130,7 @@ pub fn is_reserved_key(k: &str) -> bool { matches!(k, "v" | "D" | "y" | "Esc" | 
 fn ensure_critical_binds(m: &mut KeyMap) {
     for (k, kb) in [("q", KeyBind::Quit), ("j", KeyBind::NextItem), ("k", KeyBind::PrevItem),
         ("Down", KeyBind::NextItem), ("Up", KeyBind::PrevItem), ("?", KeyBind::Help),
-        ("Enter", KeyBind::EditFile), ("/", KeyBind::Search), ("!", KeyBind::Shell)] {
+        ("Enter", KeyBind::EditFile), ("/", KeyBind::Search), ("!", KeyBind::Shell), ("T", KeyBind::ToggleTerminalPreview)] {
         m.entry(k.to_string()).or_insert(kb);
     }
 }
@@ -257,6 +261,10 @@ pub enum SearchMode { #[serde(rename="fuzzy")] Fuzzy, #[serde(rename="substring"
 impl Default for SearchMode { fn default() -> Self { Self::Fuzzy } }
 impl SearchMode { pub fn next(self) -> Self { match self { Self::Fuzzy=>Self::Substring, Self::Substring=>Self::Fuzzy } } pub fn label(self) -> &'static str { match self { Self::Fuzzy=>"fuzzy", Self::Substring=>"substring" } } pub fn is_fuzzy(self) -> bool { matches!(self, Self::Fuzzy) } }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TerminalSettings { #[serde(default)] pub open_new_window: bool }
+impl Default for TerminalSettings { fn default() -> Self { Self { open_new_window: false } } }
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 pub enum BackupBehavior { #[serde(rename="always")] Always, #[serde(rename="if different")] IfDifferent, #[serde(rename="never")] Never }
 impl Default for BackupBehavior { fn default() -> Self { Self::IfDifferent } }
@@ -350,6 +358,7 @@ pub struct AppSettings {
     #[serde(default = "d_true")] pub post_edit_live: bool,
     #[serde(default = "d_poll")] pub post_edit_poll_interval_ms: u64,
     #[serde(default)] pub show_internal_debug: bool,
+    #[serde(default)] pub open_terminal_in_new_window: bool,
     #[serde(default = "d_true")] pub check_updates_in_doctor: bool,
 }
 impl Default for AppSettings {
@@ -363,7 +372,7 @@ impl Default for AppSettings {
             enable_mouse: true, search_mode: SearchMode::default(), start_in_filter_mode: false,
             list_width: d_lw(), default_editor: None, trash_retention_days: 30,
             post_edit_live: true, post_edit_poll_interval_ms: d_poll(), show_internal_debug: false,
-            check_updates_in_doctor: true }
+            open_terminal_in_new_window: false, check_updates_in_doctor: true }
     }
 }
 impl AppSettings {
@@ -422,7 +431,7 @@ pub struct ManifestEntry { pub alias: String, pub target: String, pub host: Opti
 #[derive(Serialize, Deserialize, Debug, Clone)] pub struct Manifest { pub files: Vec<ManifestEntry> }
 pub type HooksData = HashMap<String, HashMap<String, String>>;
 
-pub fn load_roots(p: &Path) -> Vec<PathBuf> { std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default() }
+pub fn load_roots(p: &Path) -> Vec<PathBuf> { ops::load_json_or(p) }
 pub fn save_roots(r: &[PathBuf], p: &Path) -> Result<()> { atomic_write(p, &serde_json::to_vec_pretty(r)?) }
 
 // ============ Atomic write (crash-safe) ============
@@ -430,7 +439,7 @@ pub fn save_roots(r: &[PathBuf], p: &Path) -> Result<()> { atomic_write(p, &serd
 static WRITE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 pub fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
-    if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
+    ops::ensure_parent(path)?;
     let seq = WRITE_SEQ.fetch_add(1, Ordering::Relaxed);
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "data".into());
     // unique hidden tmp name in the same dir: no cross-writer collisions, rename stays atomic (same fs)

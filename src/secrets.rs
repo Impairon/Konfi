@@ -8,6 +8,8 @@ use age::secrecy::{ExposeSecret, SecretString};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+
+use crate::ops::{load_json_or, now_nanos as ops_now_nanos, path_to_string};
 use zeroize::Zeroizing;
 
 use crate::config::atomic_write;
@@ -62,6 +64,18 @@ pub struct SecretRule {
 pub struct SecretRecipient {
     pub label: String,
     pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NamedKey {
+    pub name: String,
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct KeyStore {
+    #[serde(default)] pub shared: Vec<NamedKey>,
+    #[serde(default)] pub generated: Vec<NamedKey>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -138,6 +152,36 @@ pub fn ensure_root_layout(root: &Path) -> Result<()> {
     Ok(())
 }
 
+fn write_key_index(root: &Path, entries: &[SecretRecipient]) -> Result<()> {
+    let path = root.join(".assets/keys.json");
+    let mut store = load_key_store(root);
+    let generated = entries.iter().map(|r| NamedKey { name: r.label.clone(), key: r.key.clone() }).collect();
+    store.generated = generated;
+    atomic_write(&path, &serde_json::to_vec_pretty(&store)?)?;
+    Ok(())
+}
+
+pub fn load_key_store(root: &Path) -> KeyStore { load_json_or(&root.join(".assets/keys.json")) }
+
+pub fn save_key_store(root: &Path, store: &KeyStore) -> Result<()> {
+    atomic_write(&root.join(".assets/keys.json"), &serde_json::to_vec_pretty(store)?)
+}
+
+pub fn add_shared_key(root: &Path, name: &str, key: &str) -> Result<()> {
+    let mut store = load_key_store(root);
+    let clean = name.trim();
+    if clean.is_empty() || key.trim().is_empty() { return Err(ConfyError::InvalidInput("key name and public key are required".into())); }
+    let entry = NamedKey { name: clean.to_string(), key: key.trim().to_string() };
+    store.shared.retain(|k| k.name != clean);
+    store.shared.push(entry);
+    save_key_store(root, &store)
+}
+
+pub fn find_named_key(root: &Path, name: &str) -> Option<String> {
+    let store = load_key_store(root);
+    store.shared.iter().chain(store.generated.iter()).find(|k| k.name.eq_ignore_ascii_case(name)).map(|k| k.key.clone())
+}
+
 pub fn compile_rules(rules: &[SecretRule]) -> Result<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     for rule in rules {
@@ -156,21 +200,23 @@ pub fn scan_status(root: &Path, cfg: &SecretsConfig) -> Vec<StatusItem> {
     for path in walked_files(root) {
         let Ok(rel) = path.strip_prefix(root) else { continue };
         let rel = rel.to_string_lossy().replace('\\', "/");
-        let required = cfg.rules.iter().any(|rule| {
-            if !rule.required { return false; }
-            Glob::new(&rule.glob).ok().is_some_and(|g| {
-                g.compile_matcher().is_match(rel.as_str()) || g.compile_matcher().is_match(unencrypted_if_age(rel.as_str()))
-            })
-        });
         if rel.ends_with(".age") {
             let unencrypted = rel.strip_suffix(".age").unwrap_or(&rel);
-            let required = cfg.rules.iter().any(|rule| rule.required && Glob::new(&rule.glob).ok().is_some_and(|g| g.compile_matcher().is_match(unencrypted)));
+            let required = cfg.rules.iter().any(|rule| {
+                rule.required && Glob::new(&rule.glob).ok().is_some_and(|g| g.compile_matcher().is_match(unencrypted))
+            });
             if matches(&globs, &rel) {
                 items.push(StatusItem { rel, kind: StatusKind::Encrypted, required });
             } else {
                 items.push(StatusItem { rel, kind: StatusKind::EncryptedNoRule, required: false });
             }
         } else if matches(&globs, &rel) {
+            let required = cfg.rules.iter().any(|rule| {
+                if !rule.required { return false; }
+                Glob::new(&rule.glob).ok().is_some_and(|g| {
+                    g.compile_matcher().is_match(&rel) || g.compile_matcher().is_match(unencrypted_if_age(&rel))
+                })
+            });
             items.push(StatusItem { rel, kind: StatusKind::Plaintext, required });
         }
     }
@@ -292,10 +338,14 @@ impl SecretsManager {
             self.cfg.recipients.push(SecretRecipient { label: label.to_string(), key: public.clone() });
             self.save()?;
         }
+        let mut store = load_key_store(&self.keys_dir.parent().and_then(|p| p.parent()).unwrap_or(&self.keys_dir));
+        store.generated.retain(|k| k.name != label);
+        store.generated.push(NamedKey { name: label.to_string(), key: public.clone() });
+        save_key_store(&self.keys_dir.parent().and_then(|p| p.parent()).unwrap_or(&self.keys_dir), &store)?;
         Ok(public)
     }
 
-    pub fn list_identities(&self) -> Vec<(String, String)> {
+    pub fn identities_raw(&self) -> Vec<(String, Zeroizing<String>)> {
         let mut out = Vec::new();
         let Ok(entries) = fs::read_dir(&self.keys_dir) else { return out; };
         for entry in entries.flatten() {
@@ -304,10 +354,17 @@ impl SecretsManager {
             let label = p.file_stem().unwrap_or_default().to_string_lossy().to_string();
             let Ok(secret) = fs::read_to_string(&p) else { continue; };
             if validate_identity(&secret).is_some() {
-                out.push((label, secret));
+                out.push((label, Zeroizing::new(secret)));
             }
         }
         out
+    }
+
+    pub fn list_identities(&self) -> Vec<(String, String)> {
+        self.identities_raw().into_iter().map(|(label, secret)| {
+            let public = validate_identity(secret.as_str()).unwrap_or_default();
+            (label, public)
+        }).collect()
     }
 
     fn key_path(&self, label: &str) -> PathBuf {
@@ -317,9 +374,7 @@ impl SecretsManager {
 
 }
 
-fn now_nanos() -> u128 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()
-}
+fn now_nanos() -> u128 { ops_now_nanos() }
 
 pub fn load_config(root: &Path) -> SecretsConfig {
     let cfg_path = root.join(".assets/.secrets.json");
@@ -416,7 +471,7 @@ mod tests {
 
     #[test]
     fn round_trip_key_encryption_works() {
-        let root = std::env::temp_dir().join(format!("confy-secrets-test-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!("confy-secrets-test-{}", now_nanos()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root.join(".assets/.keys")).unwrap();
         let mut manager = SecretsManager::load(&root);

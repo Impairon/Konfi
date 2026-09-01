@@ -114,7 +114,7 @@ fn run_secret_command(confy_dir: &Path, action: &SecretCmd) -> anyhow::Result<()
             let plain = if let Some(pass) = passphrase.as_deref() {
                 crate::secrets::decrypt_with_passphrase(&bytes, pass)?
             } else {
-                let identities = manager.list_identities().into_iter().map(|(_, v)| v).collect::<Vec<_>>();
+                let identities = manager.identities_raw().into_iter().map(|(_, v)| v.to_string()).collect::<Vec<_>>();
                 crate::secrets::decrypt_with_identities(&bytes, &identities)?
             };
             let out = output.as_deref().map(root_path).transpose()?.unwrap_or_else(|| encrypted.with_extension("txt"));
@@ -190,9 +190,9 @@ fn main() -> anyhow::Result<()> {
         Some(Cmd::Link { path, name }) => {
             let src = ops::expand_tilde(path);
             if !src.exists() { eprintln!("Not found: {}", path); std::process::exit(1); }
-            let n = name.clone().unwrap_or_else(|| src.file_name().unwrap_or_default().to_string_lossy().to_string());
+            let n = name.clone().unwrap_or_else(|| ops::path_name(&src));
             let d = confy_dir.join(&n);
-            if let Some(p) = d.parent() { std::fs::create_dir_all(p)?; }
+            ops::ensure_parent(&d)?;
             if d.symlink_metadata().is_ok() { let _ = std::fs::remove_file(&d); }
             match std::os::unix::fs::symlink(&src, &d) {
                 Ok(_) => println!("Linked {} -> {}", n, src.display()),
@@ -207,7 +207,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Some(Cmd::Rollback { archive }) => {
-            let nm = PathBuf::from(archive).file_name().unwrap_or_default().to_string_lossy().to_string();
+            let nm = ops::path_name(&PathBuf::from(&archive));
             let dd = confy_dir.join(".assets/.deployments");
             let home = dirs::home_dir().unwrap_or_default();
             if let Ok(entries) = std::fs::read_dir(&dd) {
@@ -235,7 +235,7 @@ fn main() -> anyhow::Result<()> {
                     for line in std::fs::read_to_string(dep.join("created_manifest.txt")).unwrap_or_default().lines() {
                         let p = Path::new(line.trim());
                         if p == Path::new("/") || p == home { continue; }
-                        if p.exists() || p.symlink_metadata().is_ok() {
+                        if ops::path_exists(&p) {
                             let _ = crate::ops::remove_entry(p);
                         }
                     }
@@ -275,7 +275,7 @@ fn main() -> anyhow::Result<()> {
                 if !path.starts_with(&confy_dir) {
                     return Err(anyhow::anyhow!("git-push path must stay under the selected root: {}", raw));
                 }
-                if !path.exists() && path.symlink_metadata().is_err() {
+                if !ops::path_exists(&path) {
                     return Err(anyhow::anyhow!("git-push path not found: {}", raw));
                 }
                 selected.push(path);
@@ -337,7 +337,7 @@ fn check_version(cd: &Path) {
     if let Ok(s) = std::fs::read_to_string(&cache_path) {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
             if let Some(checked_at) = v.get("checked_at").and_then(|t| t.as_u64()) {
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                let now = ops::now_secs();
                 if now.saturating_sub(checked_at) < 86_400 {
                     do_check = false;
                     if let Some(latest) = v.get("latest_version").and_then(|v| v.as_str()) {
@@ -350,7 +350,7 @@ fn check_version(cd: &Path) {
     }
     if do_check {
         if let Some(latest) = ops::get_latest_version() {
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+            let now = ops::now_secs();
             let json = serde_json::json!({ "checked_at": now, "latest_version": latest });
             let _ = std::fs::write(&cache_path, serde_json::to_vec_pretty(&json).unwrap_or_default());
             if latest != current { println!("  \x1b[33mUpdate available!\x1b[0m Latest: {}", latest); }
@@ -410,7 +410,7 @@ fn run_discover(cd: &Path) {
     for ps in &known {
         let exp = if let Some(s) = ps.strip_prefix("~/") { home.join(s) } else { PathBuf::from(ps) };
         if exp.exists() {
-            let alias = exp.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let alias = ops::path_name(&exp);
             let dest = cd.join(&alias);
             if dest.symlink_metadata().is_err() {
                 match std::os::unix::fs::symlink(&exp, &dest) {
@@ -431,7 +431,7 @@ fn run_import(cd: &Path, src: &str) {
         for entry in entries.flatten() {
             let p = entry.path();
             if p.is_file() {
-                let alias = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let alias = ops::path_name(&p);
                 let dest = cd.join(&alias);
                 if dest.symlink_metadata().is_err() {
                     match std::os::unix::fs::symlink(&p, &dest) {
