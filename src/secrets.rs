@@ -9,7 +9,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::ops::{load_json_or, now_nanos as ops_now_nanos, path_to_string};
+use crate::ops::{load_json_or, now_nanos as ops_now_nanos};
 use zeroize::Zeroizing;
 
 use crate::config::atomic_write;
