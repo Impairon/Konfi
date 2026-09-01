@@ -542,8 +542,15 @@ impl App {
         if let Some(node) = self.selected_node() {
             if let Ok(r) = node.path.strip_prefix(&self.confy_dir) {
                 let rs = ops::path_to_string(&r);
-                if self.state_data.bookmarks.contains(&rs) { self.state_data.bookmarks.remove(&rs); self.set_status("Removed."); }
-                else { self.state_data.bookmarks.insert(rs); self.set_status("Added."); }
+                if self.state_data.bookmarks.contains(&rs) { 
+                    self.state_data.bookmarks.remove(&rs); 
+                    self.set_status("Removed."); 
+                }
+                else { 
+                    // Add bookmark and propagate to all parent directories
+                    ops::propagate_bookmarks_to_parents(&rs, &mut self.state_data.bookmarks);
+                    self.set_status("Added (parents marked)."); 
+                }
                 self.save_state(); self.refresh_items();
             }
         }
@@ -1050,6 +1057,29 @@ impl App {
                     }
                     Err(e) => self.set_status(format!("{}", e)),
                 }
+            }
+            InputMode::AddingNote => {
+                let note = self.input.trim().to_string();
+                if !self.add_source_path.is_empty() {
+                    if note.is_empty() { self.state_data.notes.remove(&self.add_source_path); }
+                    else { self.state_data.notes.insert(self.add_source_path.clone(), note); }
+                    self.set_status("Note saved.");
+                    self.save_state(); self.refresh_items();
+                }
+                self.input.clear(); self.add_source_path.clear();
+                self.input_mode = InputMode::Normal;
+            }
+            InputMode::AddingTag => {
+                let tag = self.input.trim().to_string();
+                if !self.add_source_path.is_empty() && !tag.is_empty() {
+                    // Add tag and propagate to all parent directories
+                    ops::propagate_bookmarks_to_parents(&self.add_source_path, &mut self.state_data.bookmarks);
+                    self.state_data.tags.entry(self.add_source_path.clone()).or_insert_with(std::collections::HashSet::new).insert(tag);
+                    self.set_status("Tag added (parents marked).");
+                    self.save_state(); self.refresh_items();
+                }
+                self.input.clear(); self.add_source_path.clear();
+                self.input_mode = InputMode::Normal;
             }
             _ => {}
         }

@@ -114,6 +114,20 @@ pub fn now_secs() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_o
 pub fn now_nanos() -> u128 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() }
 pub fn now_millis() -> u128 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() }
 
+// ponytail: inherit marks (bookmarks/tags) from children to parents up the tree
+pub fn propagate_bookmarks_to_parents(rel_path: &str, bookmarks: &mut std::collections::HashSet<String>) -> String {
+    let path = PathBuf::from(rel_path);
+    let mut current = path.clone();
+    // Walk up the directory tree and mark all parents
+    while let Some(parent) = current.parent() {
+        if parent == Path::new("") { break; }
+        let parent_str = path_to_string(&parent);
+        if !parent_str.is_empty() { bookmarks.insert(parent_str); }
+        current = parent.to_path_buf();
+    }
+    path_to_string(&path)
+}
+
 pub fn trash_deleted_at(trash_path: &Path) -> u64 {
     if let Some(meta) = load_trash_metadata(trash_path) { return meta.deleted_at; }
     fs::symlink_metadata(trash_path).and_then(|m| m.modified()).ok()
