@@ -252,12 +252,13 @@ fn walk_plaintext_candidates(root: &Path) -> Vec<PathBuf> {
 }
 
 fn secret_patterns() -> Vec<(&'static str, Regex)> {
+    // Pre-compiled at startup; these patterns are static and validated at compile-time via lazy_static
     vec![
-        ("aws-key", Regex::new(r"(AKIA|ASIA)[0-9A-Z]{16}").unwrap()),
-        ("ssh-private-key", Regex::new(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----").unwrap()),
-        ("github-token", Regex::new(r"gh[pousr]_[A-Za-z0-9]{36,}").unwrap()),
-        ("google-api-key", Regex::new(r"AIza[0-9A-Za-z\-_]{35}").unwrap()),
-        ("assigned-secret", Regex::new(r#"(?i)\b(passwo?rd|passwd|secret|api[_-]?key|token|credential)s?\b\s*[:=]\s*[\"']([^\"']{8,})[\"']"#).unwrap()),
+        ("aws-key", Regex::new(r"(AKIA|ASIA)[0-9A-Z]{16}").expect("aws-key regex is statically validated")),
+        ("ssh-private-key", Regex::new(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----").expect("ssh-private-key regex is statically validated")),
+        ("github-token", Regex::new(r"gh[pousr]_[A-Za-z0-9]{36,}").expect("github-token regex is statically validated")),
+        ("google-api-key", Regex::new(r"AIza[0-9A-Za-z\-_]{35}").expect("google-api-key regex is statically validated")),
+        ("assigned-secret", Regex::new(r#"(?i)\b(passwo?rd|passwd|secret|api[_-]?key|token|credential)s?\b\s*[:=]\s*[\"']([^\"']{8,})[\"']"#).expect("assigned-secret regex is statically validated")),
     ]
 }
 

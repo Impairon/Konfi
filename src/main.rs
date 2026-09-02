@@ -91,9 +91,9 @@ fn run_secret_command(confy_dir: &Path, action: &SecretCmd) -> anyhow::Result<()
             let target = root_path(path)?;
             let recipients = if recipient.is_empty() { manager.cfg.recipients.iter().map(|r| r.key.clone()).collect() } else { recipient.clone() };
             let passphrase = read_passphrase(*passphrase, "Passphrase: ")?;
-            if passphrase.is_some() {
+            if let Some(pass) = passphrase.as_deref() {
                 let plain = std::fs::read(&target)?;
-                let encrypted = crate::secrets::encrypt_with_passphrase(&plain, passphrase.as_deref().unwrap())?;
+                let encrypted = crate::secrets::encrypt_with_passphrase(&plain, pass)?;
                 let out = output.as_deref().map(root_path).transpose()?.unwrap_or_else(|| target.with_extension("age"));
                 crate::secrets::write_private_file(&out, &encrypted)?;
                 println!("✅ Wrote {}", out.display());

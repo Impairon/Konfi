@@ -92,7 +92,9 @@ impl Theme {
             }
         }
         if (s.theme_name == "custom" || s.theme_name == "auto") && s.custom_theme_path.is_some() {
-            if let Some(t) = Self::from_file(s.custom_theme_path.as_ref().unwrap()) { return t; }
+            if let Some(path) = &s.custom_theme_path {
+                if let Some(t) = Self::from_file(path) { return t; }
+            }
         }
         if s.theme_name == "auto" { if let Some(t) = Self::from_terminal() { return t; } }
         let (fg, ac) = match s.theme_name.as_str() {
@@ -389,13 +391,10 @@ fn draw_file_list(f: &mut Frame, app: &mut App, theme: &Theme, area: Rect) {
         let is_book = node.path.strip_prefix(&app.confy_dir).map(|r| app.state_data.bookmarks.contains(&ops::path_to_string(&r))).unwrap_or(false);
         let is_modified = app.modified_cache.contains(&node.path);
 
-        let is_sym = node.path.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false);
-        let is_exec = std::fs::metadata(&node.path).map(|m| { use std::os::unix::fs::PermissionsExt; m.permissions().mode() & 0o111 != 0 }).unwrap_or(false);
-
         let name_color = if node.broken_symlink { Color::Red }
-            else if is_sym { theme.sym_color }
+            else if node.is_symlink { theme.sym_color }
             else if node.is_dir { theme.dir_color }
-            else if is_exec { theme.exec_color }
+            else if node.is_executable { theme.exec_color }
             else if name.ends_with(".conf") || name.ends_with(".toml") || name.ends_with(".json") || name.ends_with(".yaml") || name.ends_with(".yml") { theme.config_color }
             else { theme.text };
 

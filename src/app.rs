@@ -8,7 +8,7 @@ use crate::config::*;
 use crate::ops;
 
 #[derive(Clone)]
-pub struct Node { pub path: PathBuf, pub depth: usize, pub is_dir: bool, pub expanded: bool, pub size: Option<u64>, pub broken_symlink: bool, pub has_broken_descendant: bool }
+pub struct Node { pub path: PathBuf, pub depth: usize, pub is_dir: bool, pub expanded: bool, pub size: Option<u64>, pub broken_symlink: bool, pub has_broken_descendant: bool, pub is_symlink: bool, pub is_executable: bool }
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum InputMode {
@@ -661,16 +661,21 @@ impl App {
             for entry in entries.filter_map(|e| e.ok()) {
                 let path = entry.path();
                 let link_meta = std::fs::symlink_metadata(&path).ok();
-                let broken_symlink = link_meta.as_ref().is_some_and(|m| m.file_type().is_symlink()) && std::fs::metadata(&path).is_err();
+                let is_symlink = link_meta.as_ref().is_some_and(|m| m.file_type().is_symlink());
+                let broken_symlink = is_symlink && std::fs::metadata(&path).is_err();
                 let meta = std::fs::metadata(&path).ok();
                 let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-                let size = meta.map(|m| m.len());
+                let size = meta.as_ref().map(|m| m.len());
+                let is_executable = meta.as_ref().map(|m| {
+                    use std::os::unix::fs::PermissionsExt;
+                    m.permissions().mode() & 0o111 != 0
+                }).unwrap_or(false);
                 let nm = ops::path_name(&path);
                 if is_internal_path_for(&assets, &path) || nm == ".assets" || (!sh && nm.starts_with('.')) {
                     continue;
                 }
                 let has_broken_descendant = is_dir && Self::directory_has_broken_symlink(&path);
-                out.push(Node { path, depth, is_dir, expanded: false, size, broken_symlink, has_broken_descendant });
+                out.push(Node { path, depth, is_dir, expanded: false, size, broken_symlink, has_broken_descendant, is_symlink, is_executable });
             }
         }
         Self::sort_nodes(&mut out, &self.confy_dir, &self.state_data.bookmarks, &self.selected_nodes, self.state_data.settings.folders_first);
@@ -851,8 +856,7 @@ impl App {
 
     fn preview_symlink_info(&mut self, node: &Node) {
         if !self.state_data.settings.show_symlinks_in_list { return; }
-        let is_sym = node.path.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false);
-        if is_sym {
+        if node.is_symlink {
             if let Ok(target) = std::fs::read_link(&node.path) {
                 self.preview_text.extend(format!("\x1b[1;35m\u{f481}  Symlink -> {}\x1b[0m\n\x1b[90m────────────────\x1b[0m\n", target.display()).as_bytes());
             }
@@ -1190,6 +1194,13 @@ impl App {
     pub fn paste_item(&mut self) {
         let Some(src) = self.cut_source.clone().or_else(|| self.yank_source.clone()) else { return };
         let is_cut = self.cut_source.is_some();
+        
+        // Get cached symlink info from nodes if available, otherwise check filesystem
+        let is_sym = self.nodes.iter()
+            .find(|n| n.path == src)
+            .map(|n| n.is_symlink)
+            .unwrap_or_else(|| src.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false));
+        
         let src_abs = std::fs::canonicalize(&src).unwrap_or_else(|_| src.clone());
         let dest_path = self.resolve_paste_dest(&src);
         let dest_dir = dest_path.parent().unwrap_or(&self.confy_dir).to_path_buf();
@@ -1206,7 +1217,6 @@ impl App {
             let _ = ops::remove_entry(&dest_path);
         }
         self.run_hook("pre_move", &src, "move", false);
-        let is_sym = src.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false);
         let result = if is_cut { std::fs::rename(&src, &dest_path) }
             else if is_sym { std::fs::read_link(&src).and_then(|t| std::os::unix::fs::symlink(&t, &dest_path)) }
             else if src.is_dir() { ops::copy_dir_recursive(&src, &dest_path) }
@@ -1471,45 +1481,43 @@ impl App {
     // ---------- settings ----------
 
     pub fn execute_setting(&mut self, action: SettingAction) {
-        let theme_names = if matches!(action, SettingAction::CycleTheme) { Some(self.theme_names()) } else { None };
-        {
-            let s = &mut self.state_data.settings;
-            match action {
-                SettingAction::CycleTheme => {
-                    let names = theme_names.as_ref().expect("theme names exist for cycle");
-                    s.theme_name = match names.iter().position(|n| n == &s.theme_name) {
-                        Some(i) => names[(i + 1) % names.len()].clone(),
-                        None => names[0].clone(),
-                    };
-                    self.theme_dirty = true;
-                }
-                SettingAction::AddCustomTheme => { self.return_mode = InputMode::Settings; self.input_mode = InputMode::AddingThemePath; self.input.clear(); }
-                SettingAction::CycleColorMode => { s.color_mode = s.color_mode.next(); self.theme_dirty = true; }
-                SettingAction::ToggleFolders => s.folders_first = !s.folders_first,
-                SettingAction::ToggleSizes => s.show_sizes = !s.show_sizes,
-                SettingAction::ToggleHidden => { s.show_hidden_by_default = !s.show_hidden_by_default; self.show_hidden = s.show_hidden_by_default; }
-                SettingAction::ToggleSymlinks => s.show_symlinks_in_list = !s.show_symlinks_in_list,
-                SettingAction::InputListWidth => { self.settings_input_target = "list_width".into(); self.input = s.list_width.to_string(); self.return_mode = InputMode::Settings; self.input_mode = InputMode::SettingsInput; }
-                SettingAction::SelectEditor => { self.return_mode = InputMode::Settings; self.enter_editor_select(None); }
-                SettingAction::ToggleVersioning => s.enable_versioning = !s.enable_versioning,
-                SettingAction::InputVersionLimit => { self.settings_input_target = "version_limit".into(); self.input = s.version_limit.to_string(); self.return_mode = InputMode::Settings; self.input_mode = InputMode::SettingsInput; }
-                SettingAction::CycleDeployMode => s.default_deploy_mode = s.default_deploy_mode.next(),
-                SettingAction::CycleBackupBehavior => s.backup_behavior = s.backup_behavior.next(),
-                SettingAction::CycleOverwrite => s.confirm_overwrite_deploy = s.confirm_overwrite_deploy.next(),
-                SettingAction::ToggleConfirmDel => s.confirm_delete = !s.confirm_delete,
-                SettingAction::ToggleConfirmMove => s.confirm_moves = !s.confirm_moves,
-                SettingAction::ToggleMouse => s.enable_mouse = !s.enable_mouse,
-                SettingAction::CycleSearchMode => s.search_mode = s.search_mode.next(),
-                SettingAction::ToggleHooks => s.enable_hooks = !s.enable_hooks,
-                SettingAction::ToggleTerminalWindow => s.open_terminal_in_new_window = !s.open_terminal_in_new_window,
-                SettingAction::EditGlobalHooks => { self.return_mode = InputMode::Settings; self.enter_global_hooks(); }
-                SettingAction::EditKeybinds => { self.return_mode = InputMode::Settings; self.keybind_state.select(Some(0)); self.input_mode = InputMode::KeybindMenu; }
-                SettingAction::OpenTrash => { self.return_mode = InputMode::Settings; self.reload_trash_items(); self.input_mode = InputMode::TrashManagement; }
-                SettingAction::CycleTrashRetention => {
-                    let opts = [0u32, 7, 30, 90, 365];
-                    let cur = opts.iter().position(|&d| d == s.trash_retention_days).unwrap_or(2);
-                    s.trash_retention_days = opts[(cur + 1) % opts.len()];
-                }
+        match action {
+            SettingAction::CycleTheme => {
+                let names = self.theme_names();
+                let current_name = self.state_data.settings.theme_name.clone();
+                let new_name = match names.iter().position(|n| n == &current_name) {
+                    Some(i) => names[(i + 1) % names.len()].clone(),
+                    None => names[0].clone(),
+                };
+                self.state_data.settings.theme_name = new_name;
+                self.theme_dirty = true;
+            }
+            SettingAction::AddCustomTheme => { self.return_mode = InputMode::Settings; self.input_mode = InputMode::AddingThemePath; self.input.clear(); }
+            SettingAction::CycleColorMode => { self.state_data.settings.color_mode = self.state_data.settings.color_mode.next(); self.theme_dirty = true; }
+            SettingAction::ToggleFolders => self.state_data.settings.folders_first = !self.state_data.settings.folders_first,
+            SettingAction::ToggleSizes => self.state_data.settings.show_sizes = !self.state_data.settings.show_sizes,
+            SettingAction::ToggleHidden => { self.state_data.settings.show_hidden_by_default = !self.state_data.settings.show_hidden_by_default; self.show_hidden = self.state_data.settings.show_hidden_by_default; }
+            SettingAction::ToggleSymlinks => self.state_data.settings.show_symlinks_in_list = !self.state_data.settings.show_symlinks_in_list,
+            SettingAction::InputListWidth => { self.settings_input_target = "list_width".into(); self.input = self.state_data.settings.list_width.to_string(); self.return_mode = InputMode::Settings; self.input_mode = InputMode::SettingsInput; }
+            SettingAction::SelectEditor => { self.return_mode = InputMode::Settings; self.enter_editor_select(None); }
+            SettingAction::ToggleVersioning => self.state_data.settings.enable_versioning = !self.state_data.settings.enable_versioning,
+            SettingAction::InputVersionLimit => { self.settings_input_target = "version_limit".into(); self.input = self.state_data.settings.version_limit.to_string(); self.return_mode = InputMode::Settings; self.input_mode = InputMode::SettingsInput; }
+            SettingAction::CycleDeployMode => self.state_data.settings.default_deploy_mode = self.state_data.settings.default_deploy_mode.next(),
+            SettingAction::CycleBackupBehavior => self.state_data.settings.backup_behavior = self.state_data.settings.backup_behavior.next(),
+            SettingAction::CycleOverwrite => self.state_data.settings.confirm_overwrite_deploy = self.state_data.settings.confirm_overwrite_deploy.next(),
+            SettingAction::ToggleConfirmDel => self.state_data.settings.confirm_delete = !self.state_data.settings.confirm_delete,
+            SettingAction::ToggleConfirmMove => self.state_data.settings.confirm_moves = !self.state_data.settings.confirm_moves,
+            SettingAction::ToggleMouse => self.state_data.settings.enable_mouse = !self.state_data.settings.enable_mouse,
+            SettingAction::CycleSearchMode => self.state_data.settings.search_mode = self.state_data.settings.search_mode.next(),
+            SettingAction::ToggleHooks => self.state_data.settings.enable_hooks = !self.state_data.settings.enable_hooks,
+            SettingAction::ToggleTerminalWindow => self.state_data.settings.open_terminal_in_new_window = !self.state_data.settings.open_terminal_in_new_window,
+            SettingAction::EditGlobalHooks => { self.return_mode = InputMode::Settings; self.enter_global_hooks(); }
+            SettingAction::EditKeybinds => { self.return_mode = InputMode::Settings; self.keybind_state.select(Some(0)); self.input_mode = InputMode::KeybindMenu; }
+            SettingAction::OpenTrash => { self.return_mode = InputMode::Settings; self.reload_trash_items(); self.input_mode = InputMode::TrashManagement; }
+            SettingAction::CycleTrashRetention => {
+                let opts = [0u32, 7, 30, 90, 365];
+                let cur = opts.iter().position(|&d| d == self.state_data.settings.trash_retention_days).unwrap_or(2);
+                self.state_data.settings.trash_retention_days = opts[(cur + 1) % opts.len()];
             }
         }
         self.save_state();
