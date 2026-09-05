@@ -404,7 +404,7 @@ impl ConfyState {
             }
         }
         if let Ok(s) = std::fs::read_to_string(p.with_extension("json.bak")) {
-            if let Ok(st) = serde_json::from_str(&s) { return st; }
+            if let Ok(st) = serde_json::from_str::<ConfyState>(&s) { return st; }
         }
         Self::default()
     }
