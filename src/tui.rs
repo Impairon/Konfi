@@ -489,7 +489,7 @@ fn draw_info(f: &mut Frame, app: &App, theme: &Theme) {
             use std::os::unix::fs::PermissionsExt;
             let perms = meta.permissions().mode();
             lines.push(Line::from(vec![Span::styled("  Perms:      ", Style::default().fg(theme.muted)), Span::styled(format!("{:o}", perms & 0o777), Style::default().fg(theme.text))]));
-            if let Ok(mtime) = meta.modified() {
+            if let Ok(mtime) = std::fs::metadata(path).and_then(|m| m.modified()) {
                 if let Ok(d) = mtime.duration_since(std::time::UNIX_EPOCH) {
                     lines.push(Line::from(vec![Span::styled("  Modified:   ", Style::default().fg(theme.muted)), Span::styled(ops::timestamp_from_secs(d.as_secs()), Style::default().fg(theme.text))]));
                 }

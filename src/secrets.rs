@@ -407,12 +407,12 @@ pub fn encrypt_with_recipients(plaintext: &[u8], recipients: &[String]) -> Resul
         let s = recipient.trim();
         if s.is_empty() || s.starts_with('#') { continue; }
         let rec = age::x25519::Recipient::from_str(s).map_err(|e| ConfyError::InvalidInput(format!("bad age recipient: {}", e)))?;
-        valid.push(rec);
+        valid.push(Box::new(rec) as Box<dyn age::Recipient + Send>);
     }
     if valid.is_empty() {
         return Err(ConfyError::InvalidInput("no valid age recipients configured".into()));
     }
-    let enc = age::Encryptor::with_recipients(valid.iter().map(|r| r as &dyn age::Recipient)).map_err(|e| ConfyError::Crypto(format!("encrypt: {}", e)))?;
+    let enc = age::Encryptor::with_recipients(valid).map_err(|e| ConfyError::Crypto(format!("encrypt: {}", e)))?;
     let mut out = Vec::new();
     let mut writer = enc.wrap_output(&mut out).map_err(|e| ConfyError::Crypto(format!("wrap_output: {}", e)))?;
     writer.write_all(plaintext)?;
@@ -431,23 +431,26 @@ pub fn encrypt_with_passphrase(plaintext: &[u8], passphrase: &str) -> Result<Vec
 }
 
 pub fn decrypt_with_identities(ciphertext: &[u8], identities: &[String]) -> Result<Vec<u8>> {
-    let mut ids = Vec::new();
+    let mut ids: Vec<Box<dyn age::Identity + Send>> = Vec::new();
     for s in identities {
         for line in s.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') { continue; }
             let id = age::x25519::Identity::from_str(line).map_err(|e| ConfyError::InvalidInput(format!("bad age identity: {}", e)))?;
-            ids.push(id);
+            ids.push(Box::new(id));
         }
     }
     if ids.is_empty() {
         return Err(ConfyError::InvalidInput("no age identities available".into()));
     }
     let decryptor = age::Decryptor::new(ciphertext).map_err(|e| ConfyError::Crypto(format!("decrypt: {}", e)))?;
-    if decryptor.is_scrypt() {
-        return Err(ConfyError::Crypto("encrypted with passphrase, not private keys".into()));
+    match decryptor {
+        age::Decryptor::Recipients(_) => {},
+        age::Decryptor::Scrypt(_) => {
+            return Err(ConfyError::Crypto("encrypted with passphrase, not private keys".into()));
+        }
     }
-    let mut reader = decryptor.decrypt(ids.iter().map(|i| i as &dyn age::Identity)).map_err(|_| ConfyError::Crypto("no matching age identity for encrypted file".into()))?;
+    let mut reader = decryptor.decrypt(&ids).map_err(|_| ConfyError::Crypto("no matching age identity for encrypted file".into()))?;
     let mut out = Vec::new();
     reader.read_to_end(&mut out)?;
     Ok(out)
@@ -455,11 +458,14 @@ pub fn decrypt_with_identities(ciphertext: &[u8], identities: &[String]) -> Resu
 
 pub fn decrypt_with_passphrase(ciphertext: &[u8], passphrase: &str) -> Result<Vec<u8>> {
     let decryptor = age::Decryptor::new(ciphertext).map_err(|e| ConfyError::Crypto(format!("decrypt: {}", e)))?;
-    if !decryptor.is_scrypt() {
-        return Err(ConfyError::Crypto("encrypted with recipients, not a passphrase".into()));
+    match decryptor {
+        age::Decryptor::Scrypt(_) => {},
+        age::Decryptor::Recipients(_) => {
+            return Err(ConfyError::Crypto("encrypted with recipients, not a passphrase".into()));
+        }
     }
     let identity = age::scrypt::Identity::new(SecretString::new(passphrase.to_owned().into()));
-    let mut reader = decryptor.decrypt(std::iter::once(&identity as &dyn age::Identity)).map_err(|_| ConfyError::Crypto("wrong passphrase".into()))?;
+    let mut reader = decryptor.decrypt(&[Box::new(identity) as Box<dyn age::Identity + Send>]).map_err(|_| ConfyError::Crypto("wrong passphrase".into()))?;
     let mut out = Vec::new();
     reader.read_to_end(&mut out)?;
     Ok(out)
