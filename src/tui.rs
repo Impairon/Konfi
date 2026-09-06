@@ -86,17 +86,14 @@ fn light_palette() -> FilePalette {
 impl Theme {
     pub fn new(s: &AppSettings) -> Self {
         let tc = s.color_mode.is_truecolor();
-        if let Some(ct) = s.custom_themes.get(&s.theme_name) {
-            if let (Some(fg), Some(_), Some(ac)) = (hex_to_color(&ct.foreground), hex_to_color(&ct.background), hex_to_color(&ct.accent)) {
+        if let Some(ct) = s.custom_themes.get(&s.theme_name)
+            && let (Some(fg), Some(_), Some(ac)) = (hex_to_color(&ct.foreground), hex_to_color(&ct.background), hex_to_color(&ct.accent)) {
                 return Theme::build(fg, ac, tc);
             }
-        }
-        if (s.theme_name == "custom" || s.theme_name == "auto") && s.custom_theme_path.is_some() {
-            if let Some(path) = &s.custom_theme_path {
-                if let Some(t) = Self::from_file(path) { return t; }
-            }
-        }
-        if s.theme_name == "auto" { if let Some(t) = Self::from_terminal() { return t; } }
+        if (s.theme_name == "custom" || s.theme_name == "auto") && s.custom_theme_path.is_some()
+            && let Some(path) = &s.custom_theme_path
+                && let Some(t) = Self::from_file(path) { return t; }
+        if s.theme_name == "auto" && let Some(t) = Self::from_terminal() { return t; }
         let (fg, ac) = match s.theme_name.as_str() {
             "latte" => (Color::Rgb(76, 79, 105), Color::Rgb(30, 102, 245)),
             "nord" => (Color::Rgb(216, 222, 233), Color::Rgb(136, 192, 208)),
@@ -284,7 +281,7 @@ fn handle_mouse(app: &mut App, m: crossterm::event::MouseEvent) {
     if !app.state_data.settings.enable_mouse { return; }
     if !matches!(app.input_mode, InputMode::Normal | InputMode::VisualSelect) { return; }
     let area = app.file_list_area;
-    let in_list = |row: u16, col: u16| row >= area.y + 1 && row < area.y + area.height && col >= area.x && col < area.x + area.width;
+    let in_list = |row: u16, col: u16| row > area.y && row < area.y + area.height && col >= area.x && col < area.x + area.width;
     match m.kind {
         MouseEventKind::ScrollDown => app.next(),
         MouseEventKind::ScrollUp => app.previous(),
@@ -386,9 +383,9 @@ fn draw_file_list(f: &mut Frame, app: &mut App, theme: &Theme, area: Rect) {
     let display = app.current_nodes();
     let items: Vec<ListItem> = display.iter().map(|node| {
         let name = ops::path_name(&node.path);
-        let size_str = if app.state_data.settings.show_sizes { node.size.map(|s| ops::format_size(s)).unwrap_or_default() } else { String::new() };
+        let size_str = if app.state_data.settings.show_sizes { node.size.map(ops::format_size).unwrap_or_default() } else { String::new() };
         let is_sel = app.selected_nodes.contains(&node.path);
-        let is_book = node.path.strip_prefix(&app.confy_dir).map(|r| app.state_data.bookmarks.contains(&ops::path_to_string(&r))).unwrap_or(false);
+        let is_book = node.path.strip_prefix(&app.confy_dir).map(|r| app.state_data.bookmarks.contains(&ops::path_to_string(r))).unwrap_or(false);
         let is_modified = app.modified_cache.contains(&node.path);
 
         let name_color = if node.broken_symlink { Color::Red }
@@ -489,24 +486,22 @@ fn draw_info(f: &mut Frame, app: &App, theme: &Theme) {
             use std::os::unix::fs::PermissionsExt;
             let perms = meta.permissions().mode();
             lines.push(Line::from(vec![Span::styled("  Perms:      ", Style::default().fg(theme.muted)), Span::styled(format!("{:o}", perms & 0o777), Style::default().fg(theme.text))]));
-            if let Ok(mtime) = std::fs::metadata(path).and_then(|m| m.modified()) {
-                if let Ok(d) = mtime.duration_since(std::time::UNIX_EPOCH) {
+            if let Ok(mtime) = std::fs::metadata(path).and_then(|m| m.modified())
+                && let Ok(d) = mtime.duration_since(std::time::UNIX_EPOCH) {
                     lines.push(Line::from(vec![Span::styled("  Modified:   ", Style::default().fg(theme.muted)), Span::styled(ops::timestamp_from_secs(d.as_secs()), Style::default().fg(theme.text))]));
                 }
-            }
         }
         if let Ok(rel) = path.strip_prefix(&app.confy_dir) {
-            let rs = ops::path_to_string(&rel);
+            let rs = ops::path_to_string(rel);
             if let Some(note) = app.state_data.notes.get(&rs) {
                 lines.push(Line::from(""));
                 lines.push(Line::from(vec![Span::styled(format!("  📝 Note: {}", note), Style::default().fg(Color::Yellow))]));
             }
-            if let Some(tags) = app.state_data.tags.get(&rs) {
-                if !tags.is_empty() {
+            if let Some(tags) = app.state_data.tags.get(&rs)
+                && !tags.is_empty() {
                     let ts = tags.iter().cloned().collect::<Vec<_>>().join(", ");
                     lines.push(Line::from(vec![Span::styled(format!("  🏷️  Tags: {}", ts), Style::default().fg(Color::LightBlue))]));
                 }
-            }
             if app.state_data.bookmarks.contains(&rs) {
                 lines.push(Line::from(""));
                 lines.push(Line::from(vec![Span::styled("  ★ Bookmarked", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))]));
@@ -529,7 +524,7 @@ fn draw_trash(f: &mut Frame, app: &mut App, theme: &Theme) {
         .border_style(Style::default().fg(theme.accent))
         .title(Span::styled(title, Style::default().add_modifier(Modifier::BOLD).fg(theme.text)));
     let items: Vec<ListItem> = app.trash_items.iter().map(|p| {
-        let name = ops::path_name(&p);
+        let name = ops::path_name(p);
         let name: String = name.chars().take(34).collect();
         let left = ops::trash_time_left(p, days);
         let (label, color) = match left {
@@ -583,10 +578,9 @@ fn draw_services(f: &mut Frame, app: &mut App, theme: &Theme) {
 /// Built-ins + any customs present in the keymap (deduped).
 fn keybind_items(app: &App) -> Vec<KeyBind> {
     let mut items = KeyBind::all_variants();
-    for (_, kb) in app.keymap.iter() {
-        if let KeyBind::Custom(_) = kb {
-            if !items.contains(kb) { items.push(kb.clone()); }
-        }
+    for kb in app.keymap.values() {
+        if let KeyBind::Custom(_) = kb
+            && !items.contains(kb) { items.push(kb.clone()); }
     }
     items
 }
@@ -626,7 +620,7 @@ fn handle_key_picker(app: &mut App, key: event::KeyEvent) {
         KeyCode::Enter => {
             let store = crate::secrets::load_key_store(&app.confy_dir);
             let keys = if app.key_picker_group { store.generated } else { store.shared };
-            if let Some(i) = app.key_picker_state.selected() { if let Some(k) = keys.get(i) { ops::copy_to_clipboard(&k.key); app.set_status(format!("Copied {} to clipboard.", k.name)); } }
+            if let Some(i) = app.key_picker_state.selected() && let Some(k) = keys.get(i) { ops::copy_to_clipboard(&k.key); app.set_status(format!("Copied {} to clipboard.", k.name)); }
         }
         KeyCode::Down | KeyCode::Char('j') => {
             let store = crate::secrets::load_key_store(&app.confy_dir);
@@ -848,7 +842,7 @@ fn draw_help(f: &mut Frame, app: &mut App, theme: &Theme) {
     let capacity = rows * if two_col { 2 } else { 1 };
 
     app.help_scroll = app.help_scroll.min(total - 1);
-    let pages = (total + capacity - 1) / capacity;
+    let pages = total.div_ceil(capacity);
     let page = (app.help_scroll / capacity).min(pages - 1);
     app.help_page_len = capacity; app.help_total = total; app.help_page = page;
 
@@ -856,7 +850,7 @@ fn draw_help(f: &mut Frame, app: &mut App, theme: &Theme) {
     let visible = &all[start..(start + capacity).min(total)];
 
     if two_col {
-        let half = (visible.len() + 1) / 2;
+        let half = visible.len().div_ceil(2);
         let (left, right) = visible.split_at(half);
         let cols = Layout::default().direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)]).split(body);
@@ -952,9 +946,8 @@ fn draw_settings(f: &mut Frame, app: &mut App, theme: &Theme) {
     let setting_layout = Layout::default().direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(1)]).split(inner);
     let mut display_state = ratatui::widgets::ListState::default();
-    if let Some(action_index) = app.settings_state.selected() {
-        if let Some(&row) = action_rows.get(action_index) { display_state.select(Some(row)); }
-    }
+    if let Some(action_index) = app.settings_state.selected()
+        && let Some(&row) = action_rows.get(action_index) { display_state.select(Some(row)); }
     f.render_stateful_widget(List::new(items).highlight_symbol("▶ ").highlight_style(theme.highlight), setting_layout[0], &mut display_state);
     f.render_widget(Paragraph::new(" Enter change · H/M/L jump · Esc close ").style(Style::default().fg(theme.muted)), setting_layout[1]);
     f.render_widget(block, area);
@@ -1338,7 +1331,7 @@ fn handle_help(app: &mut App, key: event::KeyEvent) {
             if app.help_total > 0 { app.help_scroll = (app.help_scroll + app.help_page_len.max(1)).min(app.help_total - 1); }
         }
         KeyCode::Home | KeyCode::Char('g') => app.help_scroll = 0,
-        KeyCode::End => { if app.help_total > 0 { app.help_scroll = app.help_total - 1; } }
+        KeyCode::End if app.help_total > 0 => { app.help_scroll = app.help_total - 1; }
         _ => {}
     }
 }
@@ -1378,9 +1371,8 @@ fn handle_settings(app: &mut App, key: event::KeyEvent) {
     match key.code {
         KeyCode::Esc => app.input_mode = InputMode::Normal,
         KeyCode::Enter => {
-            if let Some(i) = app.settings_state.selected() {
-                if let Some(&a) = SETTINGS_MENU.get(i) { app.execute_setting(a); }
-            }
+            if let Some(i) = app.settings_state.selected()
+                && let Some(&a) = SETTINGS_MENU.get(i) { app.execute_setting(a); }
         }
         KeyCode::Char('j') | KeyCode::Down => {
             if n > 0 { let i = (app.settings_state.selected().unwrap_or(0) + 1).min(n - 1); app.settings_state.select(Some(i)); }
@@ -1418,23 +1410,20 @@ fn handle_hooks_menu(app: &mut App, key: event::KeyEvent) {
             app.return_from_menu();
         }
         KeyCode::Enter => {
-            if let Some(i) = app.hooks_state.selected() {
-                if let Some(&h) = list.get(i) {
+            if let Some(i) = app.hooks_state.selected()
+                && let Some(&h) = list.get(i) {
                     app.hook_edit_type = h.to_string();
                     app.input = app.current_hook_value(h);
                     app.input_mode = InputMode::HookPathInput;
                 }
-            }
         }
         KeyCode::Char('t') => {
-            if let Some(i) = app.hooks_state.selected() {
-                if let Some(&h) = list.get(i) { app.test_hook_value(h); }
-            }
+            if let Some(i) = app.hooks_state.selected()
+                && let Some(&h) = list.get(i) { app.test_hook_value(h); }
         }
         KeyCode::Char('d') => {
-            if let Some(i) = app.hooks_state.selected() {
-                if let Some(&h) = list.get(i) { app.clear_hook_value(h); }
-            }
+            if let Some(i) = app.hooks_state.selected()
+                && let Some(&h) = list.get(i) { app.clear_hook_value(h); }
         }
         KeyCode::Char('j') | KeyCode::Down => {
             if n > 0 { let i = (app.hooks_state.selected().unwrap_or(0) + 1).min(n - 1); app.hooks_state.select(Some(i)); }
@@ -1462,8 +1451,8 @@ fn handle_root_menu(app: &mut App, terminal: &mut Tui, key: event::KeyEvent) {
     match key.code {
         KeyCode::Esc => app.input_mode = InputMode::Normal,
         KeyCode::Enter => {
-            if let Some(i) = app.root_state.selected() {
-                if let Some(r) = app.roots.get(i).cloned() {
+            if let Some(i) = app.root_state.selected()
+                && let Some(r) = app.roots.get(i).cloned() {
                     if r == app.confy_dir { app.set_status("Already active."); return; }
                     if app.switch_root(r) {
                         let _ = terminal.clear();
@@ -1471,7 +1460,6 @@ fn handle_root_menu(app: &mut App, terminal: &mut Tui, key: event::KeyEvent) {
                         app.set_status("Root switched.");
                     }
                 }
-            }
         }
         KeyCode::Char('a') => { app.input_mode = InputMode::AddingRoot; app.input.clear(); }
         KeyCode::Char('d') => app.remove_root(),
@@ -1571,12 +1559,11 @@ fn handle_keybind_menu(app: &mut App, key: event::KeyEvent) {
         KeyCode::Esc => { app.pending_reset = None; app.return_from_menu(); }
         KeyCode::Enter | KeyCode::Char(' ') => {
             app.pending_reset = None;
-            if let Some(i) = app.keybind_state.selected() {
-                if let Some(kb) = items.get(i).cloned() {
+            if let Some(i) = app.keybind_state.selected()
+                && let Some(kb) = items.get(i).cloned() {
                     app.pending_keybind = Some(kb);
                     app.input_mode = InputMode::KeybindCapture;
                 }
-            }
         }
         KeyCode::Char('a') => { app.pending_reset = None; app.input_mode = InputMode::AddCustomBind; app.input.clear(); }
         KeyCode::Char('r') => {

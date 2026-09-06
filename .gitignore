@@ -1,34 +1,29 @@
 ```
-# Compiled and build artifacts
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
+#Rust-specific ignores
+target/
+**/*.rs.bk
+Cargo.lock
 
 # Dependencies
-target/
-**/target/
+**/vendor/
 
-# Logs and temp files
+# Logs
 *.log
-*.tmp
-*.swp
 
 # Environment
 .env
 .env.local
 .env.*
 
-# Editors
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Rust-specific
-Cargo.lock
-**/Cargo.lock
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts would normally go here but target/ covers them
 ```

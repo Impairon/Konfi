@@ -224,7 +224,7 @@ fn main() -> anyhow::Result<()> {
                             if alias.is_empty() || alias.contains("..") { continue; }
                             if target == Path::new("/") || target == home { continue; }
                             let bak = dep.join(alias);
-                            if bak.exists() && bak.starts_with(&dep) {
+                            if bak.exists() && bak.starts_with(dep) {
                                 let _ = crate::ops::remove_entry(target);
                                 if std::fs::rename(&bak, target).is_err() {
                                     eprintln!("  [!] failed to restore {}", target.display());
@@ -235,7 +235,7 @@ fn main() -> anyhow::Result<()> {
                     for line in std::fs::read_to_string(dep.join("created_manifest.txt")).unwrap_or_default().lines() {
                         let p = Path::new(line.trim());
                         if p == Path::new("/") || p == home { continue; }
-                        if ops::path_exists(&p) {
+                        if ops::path_exists(p) {
                             let _ = crate::ops::remove_entry(p);
                         }
                     }
@@ -334,20 +334,18 @@ fn check_version(cd: &Path) {
     }
     let cache_path = cd.join(".assets/.last_version_check.json");
     let mut do_check = true;
-    if let Ok(s) = std::fs::read_to_string(&cache_path) {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
-            if let Some(checked_at) = v.get("checked_at").and_then(|t| t.as_u64()) {
-                let now = ops::now_secs();
-                if now.saturating_sub(checked_at) < 86_400 {
-                    do_check = false;
-                    if let Some(latest) = v.get("latest_version").and_then(|v| v.as_str()) {
-                        if latest != current { println!("  \x1b[33mUpdate available!\x1b[0m Latest: {}", latest); }
-                        else { println!("  \x1b[32mUp to date.\x1b[0m"); }
-                    }
+    if let Ok(s) = std::fs::read_to_string(&cache_path)
+        && let Ok(v) = serde_json::from_str::<serde_json::Value>(&s)
+        && let Some(checked_at) = v.get("checked_at").and_then(|t| t.as_u64()) {
+            let now = ops::now_secs();
+            if now.saturating_sub(checked_at) < 86_400 {
+                do_check = false;
+                if let Some(latest) = v.get("latest_version").and_then(|v| v.as_str()) {
+                    if latest != current { println!("  \x1b[33mUpdate available!\x1b[0m Latest: {}", latest); }
+                    else { println!("  \x1b[32mUp to date.\x1b[0m"); }
                 }
             }
         }
-    }
     if do_check {
         if let Some(latest) = ops::get_latest_version() {
             let now = ops::now_secs();
