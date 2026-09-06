@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A public key or other value that can wrap an opaque file key to a recipient stanza."><title>Recipient in age - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="age" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Recipient</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../age/index.html">age</a><span class="version">0.11.5</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Recipient</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.wrap_file_key" title="wrap_file_key">wrap_file_key</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate age</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">age</a></div><h1>Trait <span class="trait">Recipient</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/age/lib.rs.html#324-369">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Recipient {
+    // Required method
+    fn <a href="#tymethod.wrap_file_key" class="fn">wrap_file_key</a>(
+        &amp;self,
+        file_key: &amp;FileKey,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;(<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;Stanza&gt;, <a class="struct" href="https://doc.rust-lang.org/1.98.1/std/collections/hash/set/struct.HashSet.html" title="struct std::collections::hash::set::HashSet">HashSet</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;), <a class="enum" href="enum.EncryptError.html" title="enum age::EncryptError">EncryptError</a>&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A public key or other value that can wrap an opaque file key to a recipient stanza.</p>
+<p>Implementations of this trait might represent more than one recipient.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.wrap_file_key" class="method"><a class="src rightside" href="../src/age/lib.rs.html#365-368">Source</a><h4 class="code-header">fn <a href="#tymethod.wrap_file_key" class="fn">wrap_file_key</a>(
+    &amp;self,
+    file_key: &amp;FileKey,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;(<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;Stanza&gt;, <a class="struct" href="https://doc.rust-lang.org/1.98.1/std/collections/hash/set/struct.HashSet.html" title="struct std::collections::hash::set::HashSet">HashSet</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;), <a class="enum" href="enum.EncryptError.html" title="enum age::EncryptError">EncryptError</a>&gt;</h4></section></summary><div class="docblock"><p>Wraps the given file key, returning stanzas to be placed in an age file header,
+and labels that constrain how the stanzas may be combined with those from other
+recipients.</p>
+<p>Implementations may return more than one stanza per “actual recipient”, e.g. to
+support multiple formats, to build group aliases, or to act as a proxy.</p>
+<p>This method is part of the <code>Recipient</code> trait to expose age’s <a href="https://www.imperialviolet.org/2016/05/16/agility.html">one joint</a> for
+external implementations. You should not need to call this directly; instead, pass
+recipients to <a href="struct.Encryptor.html#method.with_recipients" title="associated function age::Encryptor::with_recipients"><code>Encryptor::with_recipients</code></a>.</p>
+<h5 id="labels"><a class="doc-anchor" href="#labels">§</a>Labels</h5>
+<p><a href="struct.Encryptor.html" title="struct age::Encryptor"><code>Encryptor</code></a> will succeed at encrypting only if every recipient returns the same
+set of labels. Subsets or partial overlapping sets are not allowed; all sets must
+be identical. Labels are compared exactly, and are case-sensitive.</p>
+<p>Label sets can be used to ensure a recipient is only encrypted to alongside other
+recipients with equivalent properties, or to ensure a recipient is always used
+alone. A recipient with no particular properties to enforce should return an empty
+label set.</p>
+<p>Labels can have any value that is a valid arbitrary string (<code>1*VCHAR</code> in ABNF),
+but usually take one of several forms:</p>
+<ul>
+<li><em>Common public label</em> - used by multiple recipients to permit their stanzas to
+be used only together. Examples include:
+<ul>
+<li><code>postquantum</code> - indicates that the recipient stanzas being generated are
+postquantum-secure, and that they can only be combined with other stanzas
+that are also postquantum-secure.</li>
+</ul>
+</li>
+<li><em>Common private label</em> - used by recipients created by the same private entity
+to permit their recipient stanzas to be used only together. For example,
+private recipients used in a corporate environment could all send the same
+private label in order to prevent compliant age clients from simultaneously
+wrapping file keys with other recipients.</li>
+<li><em>Random label</em> - used by recipients that want to ensure their stanzas are not
+used with any other recipient stanzas. This can be used to produce a file key
+that is only encrypted to a single recipient stanza, for example to preserve
+its authentication properties.</li>
+</ul>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait <b>is</b> <a href="https://doc.rust-lang.org/1.98.1/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><div class="negative-marker"></div><section id="impl-Recipient-for-Recipient" class="impl"><a class="src rightside" href="../src/age/scrypt.rs.html#137-168">Source</a><a href="#impl-Recipient-for-Recipient" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Recipient.html" title="trait age::Recipient">Recipient</a> for age::scrypt::<a class="struct" href="scrypt/struct.Recipient.html" title="struct age::scrypt::Recipient">Recipient</a></h3></section><section id="impl-Recipient-for-Recipient-1" class="impl"><a class="src rightside" href="../src/age/x25519.rs.html#201-243">Source</a><a href="#impl-Recipient-for-Recipient-1" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Recipient.html" title="trait age::Recipient">Recipient</a> for age::x25519::<a class="struct" href="x25519/struct.Recipient.html" title="struct age::x25519::Recipient">Recipient</a></h3></section></div><script src="../trait.impl/age/trait.Recipient.js" async></script></section></div></main></body></html>

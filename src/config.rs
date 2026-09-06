@@ -201,7 +201,7 @@ pub fn load_keymap(p: &Path) -> KeymapConfig {
                     } else { None }
                 }
             };
-            if let Some(kb) = kb { if !is_reserved_key(k) { m.insert(k.clone(), kb); } }
+            if let Some(kb) = kb && !is_reserved_key(k) { m.insert(k.clone(), kb); }
         }
     }
 
@@ -243,8 +243,9 @@ pub fn save_keymap(map: &KeyMap, aliases: &AliasMap, p: &Path) -> Result<()> {
 // ============ Settings enums ============
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum ColorMode { #[serde(rename="auto")] Auto, #[serde(rename="truecolor")] Truecolor, #[serde(rename="256")] Color256, #[serde(rename="mono")] Mono }
-impl Default for ColorMode { fn default() -> Self { Self::Auto } }
+#[derive(Default)]
+pub enum ColorMode { #[serde(rename="auto")] #[default]
+Auto, #[serde(rename="truecolor")] Truecolor, #[serde(rename="256")] Color256, #[serde(rename="mono")] Mono }
 impl ColorMode {
     pub fn next(self) -> Self { match self { Self::Auto=>Self::Truecolor, Self::Truecolor=>Self::Color256, Self::Color256=>Self::Mono, Self::Mono=>Self::Auto } }
     pub fn label(self) -> &'static str { match self { Self::Auto=>"auto", Self::Truecolor=>"truecolor", Self::Color256=>"256", Self::Mono=>"mono" } }
@@ -252,27 +253,31 @@ impl ColorMode {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum DeployMode { #[serde(rename="dry-run")] DryRun, #[serde(rename="apply")] Apply }
-impl Default for DeployMode { fn default() -> Self { Self::DryRun } }
+#[derive(Default)]
+pub enum DeployMode { #[serde(rename="dry-run")] #[default]
+DryRun, #[serde(rename="apply")] Apply }
 impl DeployMode { pub fn next(self) -> Self { match self { Self::DryRun=>Self::Apply, Self::Apply=>Self::DryRun } } pub fn label(self) -> &'static str { match self { Self::DryRun=>"dry-run", Self::Apply=>"apply" } } pub fn is_apply(self) -> bool { matches!(self, Self::Apply) } }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum SearchMode { #[serde(rename="fuzzy")] Fuzzy, #[serde(rename="substring")] Substring }
-impl Default for SearchMode { fn default() -> Self { Self::Fuzzy } }
+#[derive(Default)]
+pub enum SearchMode { #[serde(rename="fuzzy")] #[default]
+Fuzzy, #[serde(rename="substring")] Substring }
 impl SearchMode { pub fn next(self) -> Self { match self { Self::Fuzzy=>Self::Substring, Self::Substring=>Self::Fuzzy } } pub fn label(self) -> &'static str { match self { Self::Fuzzy=>"fuzzy", Self::Substring=>"substring" } } pub fn is_fuzzy(self) -> bool { matches!(self, Self::Fuzzy) } }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Default)]
 pub struct TerminalSettings { #[serde(default)] pub open_new_window: bool }
-impl Default for TerminalSettings { fn default() -> Self { Self { open_new_window: false } } }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum BackupBehavior { #[serde(rename="always")] Always, #[serde(rename="if different")] IfDifferent, #[serde(rename="never")] Never }
-impl Default for BackupBehavior { fn default() -> Self { Self::IfDifferent } }
+#[derive(Default)]
+pub enum BackupBehavior { #[serde(rename="always")] Always, #[serde(rename="if different")] #[default]
+IfDifferent, #[serde(rename="never")] Never }
 impl BackupBehavior { pub fn next(self) -> Self { match self { Self::Always=>Self::IfDifferent, Self::IfDifferent=>Self::Never, Self::Never=>Self::Always } } pub fn label(self) -> &'static str { match self { Self::Always=>"always", Self::IfDifferent=>"if different", Self::Never=>"never" } } }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum OverwriteMode { #[serde(rename="always")] Always, #[serde(rename="if different")] IfDifferent, #[serde(rename="never")] Never }
-impl Default for OverwriteMode { fn default() -> Self { Self::Always } }
+#[derive(Default)]
+pub enum OverwriteMode { #[serde(rename="always")] #[default]
+Always, #[serde(rename="if different")] IfDifferent, #[serde(rename="never")] Never }
 impl OverwriteMode { pub fn next(self) -> Self { match self { Self::Always=>Self::IfDifferent, Self::IfDifferent=>Self::Never, Self::Never=>Self::Always } } pub fn label(self) -> &'static str { match self { Self::Always=>"always", Self::IfDifferent=>"if different", Self::Never=>"never" } } }
 
 // ============ Themes ============
@@ -301,7 +306,7 @@ impl ThemeColors {
     fn from_json(txt: &str) -> Option<Self> {
         let json: serde_json::Value = serde_json::from_str(txt).ok()?;
         if let Some(themes) = json.get("themes").and_then(|v| v.as_array()) {
-            for theme in themes { if let Some(style) = theme.get("style") { if let Some(c) = Self::from_json_style(style) { return Some(c); } } }
+            for theme in themes { if let Some(style) = theme.get("style") && let Some(c) = Self::from_json_style(style) { return Some(c); } }
         }
         Self::from_json_style(&json)
     }
@@ -403,17 +408,15 @@ impl ConfyState {
                 Err(e) => tracing::warn!(?p, error = %e, "state file corrupt; trying backup"),
             }
         }
-        if let Ok(s) = std::fs::read_to_string(p.with_extension("json.bak")) {
-            if let Ok(st) = serde_json::from_str(&s) { return st; }
-        }
+        if let Ok(s) = std::fs::read_to_string(p.with_extension("json.bak"))
+            && let Ok(st) = serde_json::from_str::<ConfyState>(&s) { return st; }
         Self::default()
     }
     pub fn save(&self, p: &Path) -> Result<()> {
-        if let Ok(prev) = std::fs::read_to_string(p) {
-            if serde_json::from_str::<ConfyState>(&prev).is_ok() {
+        if let Ok(prev) = std::fs::read_to_string(p)
+            && serde_json::from_str::<ConfyState>(&prev).is_ok() {
                 let _ = std::fs::write(p.with_extension("json.bak"), prev);
             }
-        }
         atomic_write(p, &serde_json::to_vec_pretty(self)?)
     }
 }
@@ -466,9 +469,9 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
         Ok(()) => {
             std::fs::rename(&tmp, path)?;
             #[cfg(unix)]
-            if let Some(parent) = path.parent() { if let Ok(d) = std::fs::File::open(parent) { let _ = d.sync_all(); } }
+            if let Some(parent) = path.parent() && let Ok(d) = std::fs::File::open(parent) { let _ = d.sync_all(); }
             Ok(())
         }
-        Err(e) => { let _ = std::fs::remove_file(&tmp); Err(e.into()) }
+        Err(e) => { let _ = std::fs::remove_file(&tmp); Err(e) }
     }
 }

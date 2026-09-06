@@ -228,12 +228,11 @@ impl App {
     pub fn hook_values(&self, name: &str, file: &Path) -> Vec<String> {
         if !self.state_data.settings.enable_hooks { return Vec::new(); }
         let mut out = Vec::new();
-        if let Some(v) = self.hooks.get(name) { if !v.trim().is_empty() { out.push(v.clone()); } }
+        if let Some(v) = self.hooks.get(name) && !v.trim().is_empty() { out.push(v.clone()); }
         if let Ok(rel) = file.strip_prefix(&self.confy_dir) {
-            let rel_str = ops::path_to_string(&rel);
-            if let Some(obj) = self.state_data.object_hooks.get(&rel_str) {
-                if let Some(v) = obj.get(name) { if !v.trim().is_empty() { out.push(v.clone()); } }
-            }
+            let rel_str = ops::path_to_string(rel);
+            if let Some(obj) = self.state_data.object_hooks.get(&rel_str)
+                && let Some(v) = obj.get(name) && !v.trim().is_empty() { out.push(v.clone()); }
         }
         out
     }
@@ -272,22 +271,20 @@ impl App {
             for entry in entries.flatten() {
                 let p = entry.path();
                 if p.to_string_lossy().ends_with(".json") { continue; }
-                if let Some(left) = ops::trash_time_left(&p, days) {
-                    if left <= 0 {
+                if let Some(left) = ops::trash_time_left(&p, days)
+                    && left <= 0 {
                         let _ = ops::remove_entry(&p);
                         ops::remove_trash_metadata(&p);
                         tracing::info!(file = ?p, retention_days = days, "trash auto-cleaned");
                     }
-                }
             }
         }
         if let Ok(entries) = std::fs::read_dir(&self.trash_dir) {
             for entry in entries.flatten() {
                 let p = entry.path();
                 let s = ops::path_to_string(&p);
-                if let Some(base) = s.strip_suffix(".json") {
-                    if !Path::new(base).exists() { let _ = std::fs::remove_file(&p); }
-                }
+                if let Some(base) = s.strip_suffix(".json")
+                    && !Path::new(base).exists() { let _ = std::fs::remove_file(&p); }
             }
         }
     }
@@ -335,7 +332,7 @@ impl App {
 
     pub fn add_to_recent(&mut self, path: &Path) {
         if let Ok(rel) = path.strip_prefix(&self.confy_dir) {
-            let rs = ops::path_to_string(&rel);
+            let rs = ops::path_to_string(rel);
             self.state_data.recent.retain(|x| x != &rs);
             self.state_data.recent.push_front(rs);
             self.state_data.recent.truncate(5);
@@ -415,8 +412,8 @@ impl App {
     pub fn enter_editor_select(&mut self, target: Option<PathBuf>) {
         let known = ["nvim", "vim", "vi", "nano", "code", "codium", "zed", "emacs", "micro", "kak", "hx"];
         let mut avail = Vec::new();
-        if let Ok(ed) = std::env::var("EDITOR") { if !ed.trim().is_empty() { avail.push(ed.trim().to_string()); } }
-        if let Ok(ed) = std::env::var("VISUAL") { if !ed.trim().is_empty() && !avail.iter().any(|a| a == ed.trim()) { avail.push(ed.trim().to_string()); } }
+        if let Ok(ed) = std::env::var("EDITOR") && !ed.trim().is_empty() { avail.push(ed.trim().to_string()); }
+        if let Ok(ed) = std::env::var("VISUAL") && !ed.trim().is_empty() && !avail.iter().any(|a| a == ed.trim()) { avail.push(ed.trim().to_string()); }
         for e in &known {
             if avail.iter().any(|a| a == e) { continue; }
             if ops::command_exists(e) { avail.push((*e).to_string()); }
@@ -427,8 +424,8 @@ impl App {
     }
 
     pub fn submit_editor_select(&mut self, set_default: bool) {
-        if let Some(i) = self.editor_state.selected() {
-            if let Some(ed) = self.available_editors.get(i).cloned() {
+        if let Some(i) = self.editor_state.selected()
+            && let Some(ed) = self.available_editors.get(i).cloned() {
                 let target = self.tui_edit_target.take();
                 self.selected_editor = Some(ed.clone());
                 if set_default || target.is_none() {
@@ -442,7 +439,6 @@ impl App {
                 }
                 return;
             }
-        }
         self.input_mode = InputMode::Normal;
     }
 
@@ -471,9 +467,8 @@ impl App {
 
     pub fn execute_edit(&mut self, tp: &Path, ed: &str) {
         let np = self.selected_node().map(|n| n.path).unwrap_or_else(|| tp.to_path_buf());
-        if let Some(report) = self.run_hook_reported("pre_edit", tp, "edit", false) {
-            if report.starts_with('✗') { self.set_sticky_status(report); }
-        }
+        if let Some(report) = self.run_hook_reported("pre_edit", tp, "edit", false)
+            && report.starts_with('✗') { self.set_sticky_status(report); }
         if !ops::command_exists(ed) {
             self.set_status("Editor not found — pick another.");
             self.enter_editor_select(Some(tp.to_path_buf()));
@@ -529,19 +524,18 @@ impl App {
     // ---------- tags / bookmarks / notes ----------
 
     pub fn begin_add_tag(&mut self, tt: &str) {
-        if let Some(node) = self.selected_node() {
-            if let Ok(r) = node.path.strip_prefix(&self.confy_dir) {
-                self.add_source_path = ops::path_to_string(&r);
+        if let Some(node) = self.selected_node()
+            && let Ok(r) = node.path.strip_prefix(&self.confy_dir) {
+                self.add_source_path = ops::path_to_string(r);
                 self.tag_type = tt.to_string(); self.input_mode = InputMode::AddingTag;
                 self.input.clear(); self.status.clear();
             }
-        }
     }
 
     pub fn toggle_bookmark(&mut self) {
-        if let Some(node) = self.selected_node() {
-            if let Ok(r) = node.path.strip_prefix(&self.confy_dir) {
-                let rs = ops::path_to_string(&r);
+        if let Some(node) = self.selected_node()
+            && let Ok(r) = node.path.strip_prefix(&self.confy_dir) {
+                let rs = ops::path_to_string(r);
                 if self.state_data.bookmarks.contains(&rs) { 
                     self.state_data.bookmarks.remove(&rs); 
                     self.set_status("Removed."); 
@@ -553,18 +547,16 @@ impl App {
                 }
                 self.save_state(); self.refresh_items();
             }
-        }
     }
 
     pub fn begin_add_note(&mut self) {
-        if let Some(node) = self.selected_node() {
-            if let Ok(r) = node.path.strip_prefix(&self.confy_dir) {
-                let rs = ops::path_to_string(&r);
+        if let Some(node) = self.selected_node()
+            && let Ok(r) = node.path.strip_prefix(&self.confy_dir) {
+                let rs = ops::path_to_string(r);
                 self.add_source_path = rs.clone();
                 self.input = self.state_data.notes.get(&rs).cloned().unwrap_or_default();
                 self.input_mode = InputMode::AddingNote; self.status.clear();
             }
-        }
     }
 
     // ---------- versions ----------
@@ -580,7 +572,7 @@ impl App {
                     for snap in snaps.iter().rev() {
                         let hf = snap.join(rel);
                         if hf.exists() {
-                            let ds = ops::path_name(&snap);
+                            let ds = ops::path_name(snap);
                             let fmt = if ds.len() >= 13 { format!("{}-{}-{} {}:{}", &ds[0..4], &ds[4..6], &ds[6..8], &ds[9..11], &ds[11..13]) } else { ds.clone() };
                             self.available_versions.push((fmt, hf));
                         }
@@ -595,8 +587,8 @@ impl App {
     pub fn restore_version(&mut self) {
         if let Some(ri) = self.version_state.selected() {
             let vi = ri / 2;
-            if let Some((_, hp)) = self.available_versions.get(vi).cloned() {
-                if let Some(rp) = &self.current_rel_path {
+            if let Some((_, hp)) = self.available_versions.get(vi).cloned()
+                && let Some(rp) = &self.current_rel_path {
                     let dest = self.confy_dir.join(rp);
                     let is_sym = dest.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false);
                     let needs_sudo = match std::fs::OpenOptions::new().write(true).open(&dest) {
@@ -613,15 +605,14 @@ impl App {
                         Err(e) => self.set_status(format!("Restore failed: {}", e)),
                     }
                 }
-            }
         }
     }
 
     pub fn show_diff(&mut self) {
         if let Some(ri) = self.version_state.selected() {
             let vi = ri / 2;
-            if let Some((_, hp)) = self.available_versions.get(vi).cloned() {
-                if let Some(rp) = &self.current_rel_path {
+            if let Some((_, hp)) = self.available_versions.get(vi).cloned()
+                && let Some(rp) = &self.current_rel_path {
                     let cp = self.confy_dir.join(rp);
                     self.preview_pinned = true; self.preview_text.clear();
                     match ops::generate_diff(&hp, &cp) {
@@ -632,7 +623,6 @@ impl App {
                         Err(e) => { self.preview_text = format!("Diff failed: {}", e).into_bytes(); self.set_status("Diff failed."); }
                     }
                 }
-            }
         }
     }
 
@@ -644,12 +634,12 @@ impl App {
 
     pub fn sort_nodes(ns: &mut [Node], cd: &Path, bk: &HashSet<String>, sel: &HashSet<PathBuf>, ff: bool) {
         ns.sort_by(|a, b| {
-            let ar = a.path.strip_prefix(cd).map(|p| ops::path_to_string(&p)).unwrap_or_default();
-            let br = b.path.strip_prefix(cd).map(|p| ops::path_to_string(&p)).unwrap_or_default();
+            let ar = a.path.strip_prefix(cd).map(|p| ops::path_to_string(p)).unwrap_or_default();
+            let br = b.path.strip_prefix(cd).map(|p| ops::path_to_string(p)).unwrap_or_default();
             bk.contains(&br).cmp(&bk.contains(&ar))
                 .then_with(|| sel.contains(&b.path).cmp(&sel.contains(&a.path)))
                 .then_with(|| if ff { b.is_dir.cmp(&a.is_dir) } else { std::cmp::Ordering::Equal })
-                .then_with(|| a.path.file_name().unwrap_or_default().cmp(&b.path.file_name().unwrap_or_default()))
+                .then_with(|| a.path.file_name().unwrap_or_default().cmp(b.path.file_name().unwrap_or_default()))
         });
     }
 
@@ -715,11 +705,9 @@ impl App {
         } else { self.state.select(None); }
         let mut max_mtime: Option<SystemTime> = std::fs::metadata(&self.confy_dir).ok().and_then(|m| m.modified().ok());
         for node in &self.nodes {
-            if node.is_dir && node.expanded {
-                if let Ok(meta) = std::fs::metadata(&node.path) {
-                    if let Ok(mtime) = meta.modified() { if Some(mtime) > max_mtime { max_mtime = Some(mtime); } }
-                }
-            }
+            if node.is_dir && node.expanded
+                && let Ok(meta) = std::fs::metadata(&node.path)
+                    && let Ok(mtime) = meta.modified() && Some(mtime) > max_mtime { max_mtime = Some(mtime); }
         }
         self.last_dir_mtime = max_mtime;
 
@@ -728,13 +716,11 @@ impl App {
         if !self.deploy_index.is_empty() {
             for node in &self.nodes {
                 if node.is_dir { continue; }
-                if let Ok(rel) = node.path.strip_prefix(&self.confy_dir) {
-                    if let Some(d) = self.deploy_index.get(&ops::path_to_string(&rel)) {
-                        if ops::hash_file(&node.path).unwrap_or(u64::MAX) != d.last_deployed_hash {
+                if let Ok(rel) = node.path.strip_prefix(&self.confy_dir)
+                    && let Some(d) = self.deploy_index.get(&ops::path_to_string(rel))
+                        && ops::hash_file(&node.path).unwrap_or(u64::MAX) != d.last_deployed_hash {
                             self.modified_cache.insert(node.path.clone());
                         }
-                    }
-                }
             }
         }
         self.update_preview();
@@ -745,20 +731,20 @@ impl App {
         let mut base_nodes = self.nodes.clone();
         if self.bookmarks_only {
             base_nodes.retain(|n| match n.path.strip_prefix(&self.confy_dir) {
-                Ok(r) => self.state_data.bookmarks.contains(&ops::path_to_string(&r)), Err(_) => false,
+                Ok(r) => self.state_data.bookmarks.contains(&ops::path_to_string(r)), Err(_) => false,
             });
         }
         if self.host_filter {
             let tag = format!("host:{}", ops::hostname());
             base_nodes.retain(|n| match n.path.strip_prefix(&self.confy_dir) {
-                Ok(r) => self.state_data.tags.get(&ops::path_to_string(&r)).map(|t| t.contains(&tag)).unwrap_or(false),
+                Ok(r) => self.state_data.tags.get(&ops::path_to_string(r)).map(|t| t.contains(&tag)).unwrap_or(false),
                 Err(_) => false,
             });
         }
         if self.jump_list {
             let rec: HashSet<String> = self.state_data.recent.iter().cloned().collect();
             base_nodes.retain(|n| match n.path.strip_prefix(&self.confy_dir) {
-                Ok(r) => { let rs = ops::path_to_string(&r); self.state_data.bookmarks.contains(&rs) || rec.contains(&rs) }
+                Ok(r) => { let rs = ops::path_to_string(r); self.state_data.bookmarks.contains(&rs) || rec.contains(&rs) }
                 Err(_) => false,
             });
         }
@@ -810,9 +796,8 @@ impl App {
         let i = self.state.selected().unwrap_or(0);
         let is_dir = self.current_nodes().get(i).map(|n| n.is_dir).unwrap_or(false);
         if is_dir {
-            if let Some(node) = self.current_nodes().get(i) {
-                if node.expanded { return; }
-            }
+            if let Some(node) = self.current_nodes().get(i)
+                && node.expanded { return; }
             self.expand_node(i);
         }
     }
@@ -856,25 +841,23 @@ impl App {
 
     fn preview_symlink_info(&mut self, node: &Node) {
         if !self.state_data.settings.show_symlinks_in_list { return; }
-        if node.is_symlink {
-            if let Ok(target) = std::fs::read_link(&node.path) {
+        if node.is_symlink
+            && let Ok(target) = std::fs::read_link(&node.path) {
                 self.preview_text.extend(format!("\x1b[1;35m\u{f481}  Symlink -> {}\x1b[0m\n\x1b[90m────────────────\x1b[0m\n", target.display()).as_bytes());
             }
-        }
     }
 
     fn preview_notes_and_tags(&mut self, node: &Node) {
         let Ok(rel) = node.path.strip_prefix(&self.confy_dir) else { return };
-        let rs = ops::path_to_string(&rel);
+        let rs = ops::path_to_string(rel);
         if let Some(note) = self.state_data.notes.get(&rs) {
             self.preview_text.extend(format!("\x1b[1;33m📝  Note: {}\x1b[0m\n\x1b[90m────────────────\x1b[0m\n", note).as_bytes());
         }
-        if let Some(tags) = self.state_data.tags.get(&rs) {
-            if !tags.is_empty() {
+        if let Some(tags) = self.state_data.tags.get(&rs)
+            && !tags.is_empty() {
                 let ts = tags.iter().cloned().collect::<Vec<_>>().join(", ");
                 self.preview_text.extend(format!("\x1b[1;34m🏷️  Tags: {}\x1b[0m\n\x1b[90m────────────────\x1b[0m\n", ts).as_bytes());
             }
-        }
     }
 
     fn preview_directory(&mut self, target: &Path) {
@@ -908,12 +891,11 @@ impl App {
         let out = Command::new("chafa").arg("--format=symbols").arg("--symbols=solid").arg("--view-size").arg(size_arg)
             .arg(target).stdout(Stdio::piped()).stderr(Stdio::null()).output();
         let mut output = format!("\x1b[1;36m\u{f1c5}  Image\x1b[0m\n\x1b[90m────────────────\x1b[0m\n\x1b[33m{}\x1b[0m\n", ops::get_file_info(target));
-        if let Ok(out) = out {
-            if out.status.success() && !out.stdout.is_empty() {
+        if let Ok(out) = out
+            && out.status.success() && !out.stdout.is_empty() {
                 output.push_str("\n\x1b[90m─── Preview ───\x1b[0m\n");
                 output.push_str(&String::from_utf8_lossy(&out.stdout));
             }
-        }
         output.into_bytes()
     }
 
@@ -923,12 +905,11 @@ impl App {
         if let Some(thumb) = ops::extract_video_thumbnail_cached(target) {
             let out = Command::new("chafa").arg("--format=symbols").arg("--symbols=solid").arg("--view-size").arg(size_arg)
                 .arg(&thumb).stdout(Stdio::piped()).stderr(Stdio::null()).output();
-            if let Ok(out) = out {
-                if out.status.success() && !out.stdout.is_empty() {
+            if let Ok(out) = out
+                && out.status.success() && !out.stdout.is_empty() {
                     output.push_str("\n\x1b[90m─── Thumbnail ───\x1b[0m\n");
                     output.push_str(&String::from_utf8_lossy(&out.stdout));
                 }
-            }
         }
         output.into_bytes()
     }
@@ -979,9 +960,8 @@ impl App {
                 Some((len, mtime)) => {
                     if len != prev.0 || mtime != prev.1 {
                         // let in-flight writes settle before snapshotting
-                        if let Some(t) = mtime {
-                            if now.duration_since(t).map(|d| d.as_millis() < 250).unwrap_or(false) { continue; }
-                        }
+                        if let Some(t) = mtime
+                            && now.duration_since(t).map(|d| d.as_millis() < 250).unwrap_or(false) { continue; }
                         changed.push(ops::path_name(&k));
                         self.file_baselines.insert(k, (len, mtime));
                     }
@@ -1001,24 +981,20 @@ impl App {
     }
 
     pub fn check_fs_changes(&mut self) {
-        if let Some(time) = self.last_status_time {
-            if !self.status_sticky && SystemTime::now().duration_since(time).unwrap_or_default().as_secs() >= 1 {
+        if let Some(time) = self.last_status_time
+            && !self.status_sticky && SystemTime::now().duration_since(time).unwrap_or_default().as_secs() >= 1 {
                 self.status.clear(); self.last_status_time = None;
             }
-        }
         let mut need_refresh = false;
-        if let Ok(meta) = std::fs::metadata(&self.confy_dir) {
-            if let Ok(mtime) = meta.modified() { if Some(mtime) > self.last_dir_mtime { need_refresh = true; } }
-        }
+        if let Ok(meta) = std::fs::metadata(&self.confy_dir)
+            && let Ok(mtime) = meta.modified() && Some(mtime) > self.last_dir_mtime { need_refresh = true; }
         if need_refresh { self.refresh_items(); return; }
-        if !self.preview_pinned {
-            if let Some(node) = self.selected_node() {
+        if !self.preview_pinned
+            && let Some(node) = self.selected_node() {
                 let target = std::fs::canonicalize(&node.path).unwrap_or_else(|_| node.path.clone());
-                if let Ok(meta) = std::fs::metadata(&target) {
-                    if let Ok(mtime) = meta.modified() { if Some(mtime) != self.last_file_mtime { self.update_preview(); } }
-                }
+                if let Ok(meta) = std::fs::metadata(&target)
+                    && let Ok(mtime) = meta.modified() && Some(mtime) != self.last_file_mtime { self.update_preview(); }
             }
-        }
     }
 
     // ---------- add symlink / folder ----------
@@ -1050,7 +1026,7 @@ impl App {
                 let dest = dest_dir.join(&alias);
                 if !ops::is_path_safe(&self.confy_dir, &dest) { self.set_status("Cannot escape root"); self.input.clear(); return; }
                 if ops::path_exists(&dest) { self.set_status("Already exists"); self.input.clear(); return; }
-                if let Some(parent) = dest.parent() { if let Err(e) = std::fs::create_dir_all(parent) { self.set_status(format!("{}", e)); return; } }
+                if let Some(parent) = dest.parent() && let Err(e) = std::fs::create_dir_all(parent) { self.set_status(format!("{}", e)); return; }
                 match std::os::unix::fs::symlink(&source, &dest) {
                     Ok(_) => {
                         self.set_status(format!("Added: {}", alias));
@@ -1078,7 +1054,7 @@ impl App {
                 if !self.add_source_path.is_empty() && !tag.is_empty() {
                     // Add tag and propagate to all parent directories
                     ops::propagate_bookmarks_to_parents(&self.add_source_path, &mut self.state_data.bookmarks);
-                    self.state_data.tags.entry(self.add_source_path.clone()).or_insert_with(std::collections::HashSet::new).insert(tag);
+                    self.state_data.tags.entry(self.add_source_path.clone()).or_default().insert(tag);
                     self.set_status("Tag added (parents marked).");
                     self.save_state(); self.refresh_items();
                 }
@@ -1134,9 +1110,8 @@ impl App {
         if let Some(node) = self.selected_node() {
             if self.is_internal_path(&node.path) { self.set_status("Protected: confy internal object."); return; }
             if !self.state_data.settings.confirm_delete { self.pending_delete = Some(node.path.clone()); self.execute_delete(); return; }
-            if let Some(p) = &self.pending_delete {
-                if *p == node.path { self.execute_delete(); return; }
-            }
+            if let Some(p) = &self.pending_delete
+                && *p == node.path { self.execute_delete(); return; }
             self.pending_delete = Some(node.path.clone());
             self.set_sticky_status(format!("Delete {}? Press d again to confirm",
                 node.path.file_name().unwrap_or_default().to_string_lossy()));
@@ -1351,7 +1326,7 @@ impl App {
         }
         let editor = self.selected_editor.clone().unwrap_or_else(|| "vi".into());
         let path = ops::service_unit_path(&name, self.service_user_scope);
-        if let Some(parent) = path.parent() { if let Err(e) = std::fs::create_dir_all(parent) { self.set_status(format!("Cannot create unit directory: {}", e)); return; } }
+        if let Some(parent) = path.parent() && let Err(e) = std::fs::create_dir_all(parent) { self.set_status(format!("Cannot create unit directory: {}", e)); return; }
         if path.exists() { self.set_status("That unit already exists"); return; }
         if !ops::open_editor(&path, &editor) { self.set_status("Editor failed; unit was not reloaded"); return; }
         let ok = ops::daemon_reload(self.service_user_scope);
@@ -1362,35 +1337,32 @@ impl App {
     }
 
     pub fn restart_selected_service(&mut self) {
-        if let Some(i) = self.service_state.selected() {
-            if let Some((name, _, _)) = self.available_services.get(i) {
+        if let Some(i) = self.service_state.selected()
+            && let Some((name, _, _)) = self.available_services.get(i) {
                 let ok = ops::restart_service(name, self.service_user_scope);
                 self.set_status(if ok { format!("Restarted {}", name) } else { format!("Failed to restart {}", name) });
                 self.available_services = ops::list_services(self.service_user_scope);
             }
-        }
     }
 
     pub fn stop_selected_service(&mut self) {
-        if let Some(i) = self.service_state.selected() {
-            if let Some((name, _, _)) = self.available_services.get(i) {
+        if let Some(i) = self.service_state.selected()
+            && let Some((name, _, _)) = self.available_services.get(i) {
                 let ok = ops::stop_service(name, self.service_user_scope);
                 self.set_status(if ok { format!("Stopped {}", name) } else { format!("Failed to stop {}", name) });
                 self.available_services = ops::list_services(self.service_user_scope);
             }
-        }
     }
 
     pub fn delete_selected_service(&mut self) {
-        if let Some(i) = self.service_state.selected() {
-            if let Some((name, _, _)) = self.available_services.get(i).cloned() {
+        if let Some(i) = self.service_state.selected()
+            && let Some((name, _, _)) = self.available_services.get(i).cloned() {
                 let path = ops::service_unit_path(&name, self.service_user_scope);
                 match std::fs::remove_file(&path) {
                     Ok(_) => { let _ = ops::daemon_reload(self.service_user_scope); self.available_services = ops::list_services(self.service_user_scope); self.set_status(format!("Deleted {}", name)); }
                     Err(e) => self.set_status(format!("Delete failed: {}", e)),
                 }
             }
-        }
     }
 
     // ---------- archive & deploy ----------
@@ -1399,7 +1371,7 @@ impl App {
         if self.selected_nodes.is_empty() { self.set_status("Nothing selected (Space to select)"); return; }
         let files: Vec<(String, PathBuf)> = self.selected_nodes.iter().cloned()
             .filter_map(|p| {
-                let alias = p.strip_prefix(&self.confy_dir).ok().map(|x| ops::path_to_string(&x)).unwrap_or_default();
+                let alias = p.strip_prefix(&self.confy_dir).ok().map(|x| ops::path_to_string(x)).unwrap_or_default();
                 Some((alias, p))
             })
             .filter(|(_, p)| !self.is_internal_path(p))
@@ -1407,9 +1379,8 @@ impl App {
         if files.is_empty() { self.set_status("Nothing to archive"); return; }
         let mut hd: HooksData = HashMap::new();
         for (alias, _) in &files {
-            if let Some(m) = self.state_data.object_hooks.get(alias) {
-                if !m.is_empty() { hd.insert(alias.clone(), m.clone()); }
-            }
+            if let Some(m) = self.state_data.object_hooks.get(alias)
+                && !m.is_empty() { hd.insert(alias.clone(), m.clone()); }
         }
         self.run_hook("pre_archive", &self.confy_dir, "archive", false);
         match ops::create_archive(&self.confy_dir, &files, None, &hd) {
@@ -1548,7 +1519,7 @@ impl App {
         let Some(node) = self.selected_node() else { return };
         if self.is_internal_path(&node.path) { self.set_status("Protected."); return; }
         if let Ok(rel) = node.path.strip_prefix(&self.confy_dir) {
-            self.hooks_target_path = Some(ops::path_to_string(&rel));
+            self.hooks_target_path = Some(ops::path_to_string(rel));
             self.hooks_state.select(Some(0));
             self.input_mode = InputMode::HooksMenu;
         }
@@ -1671,15 +1642,14 @@ impl App {
         let mut out: Vec<String> = Vec::new();
         for (i, tok) in cmd.split_whitespace().enumerate() {
             let mut t = tok;
-            if let Some(name) = tok.strip_prefix('!') {
-                if !name.is_empty() {
+            if let Some(name) = tok.strip_prefix('!')
+                && !name.is_empty() {
                     if let Some(real) = self.shell_aliases.get(&format!("!{}", name)) {
                         out.push(if file_str.is_empty() { real.clone() } else { real.replace("{f}", &file_str) });
                         continue;
                     }
                     if i == 0 { t = name; } // leading "!raw-cmd" behaves like hook syntax
                 }
-            }
             out.push(if file_str.is_empty() { t.to_string() } else { t.replace("{f}", &file_str) });
         }
         out.join(" ")

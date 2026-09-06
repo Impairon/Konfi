@@ -121,7 +121,7 @@ pub fn propagate_bookmarks_to_parents(rel_path: &str, bookmarks: &mut std::colle
     // Walk up the directory tree and mark all parents
     while let Some(parent) = current.parent() {
         if parent == Path::new("") { break; }
-        let parent_str = path_to_string(&parent);
+        let parent_str = path_to_string(parent);
         if !parent_str.is_empty() { bookmarks.insert(parent_str); }
         current = parent.to_path_buf();
     }
@@ -150,7 +150,7 @@ pub fn format_time_left(secs: i64) -> String {
 
 pub fn expand_tilde(p: &str) -> PathBuf {
     if let Some(s) = p.strip_prefix("~/") { if let Some(h) = dirs::home_dir() { return h.join(s); } }
-    else if p == "~" { if let Some(h) = dirs::home_dir() { return h; } }
+    else if p == "~" && let Some(h) = dirs::home_dir() { return h; }
     PathBuf::from(p)
 }
 
@@ -167,8 +167,8 @@ pub fn timestamp_from_secs(secs: u64) -> String {
 
 fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     let mut y = 1970u64; let mut d = days;
-    loop { let leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); let yd = if leap { 366 } else { 365 }; if d < yd { break; } d -= yd; y += 1; }
-    let leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    loop { let leap = (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400); let yd = if leap { 366 } else { 365 }; if d < yd { break; } d -= yd; y += 1; }
+    let leap = (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400);
     let mdays = [31u64, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let mut m = 1u64;
     for &md in &mdays { if d < md { break; } d -= md; m += 1; }
@@ -384,7 +384,7 @@ pub struct HookContext { pub confy_dir: PathBuf, pub file: PathBuf, pub alias: S
 
 impl HookContext {
     pub fn new(confy_dir: &Path, file: &Path, op: &str, success: bool, tags: &HashMap<String, HashSet<String>>) -> Self {
-        let alias = path_name(&file);
+        let alias = path_name(file);
         let ts = tags.get(&alias).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>().join(",");
         Self { confy_dir: confy_dir.to_path_buf(), file: file.to_path_buf(), alias, op: op.to_string(), tags: ts, hostname: hostname(), success }
     }
@@ -472,8 +472,8 @@ pub fn take_snapshot(confy_dir: &Path, history_dir: &Path, hooks: &ConfyHooks, s
             // skip dirs, dotfiles, and confy's own backup zips (they'd bloat history)
             if p.is_dir() || fname.starts_with('.')
                 || p.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("zip")).unwrap_or(false) { continue; }
-            if let Ok(rel) = p.strip_prefix(confy_dir) {
-                if has_file_changed(history_dir, &p, rel) {
+            if let Ok(rel) = p.strip_prefix(confy_dir)
+                && has_file_changed(history_dir, &p, rel) {
                     if !changed {
                         run_hook(hooks, settings, confy_dir, "pre_save_version", &p, "save_version", false, tags);
                         let _ = fs::create_dir_all(&sd);
@@ -484,7 +484,6 @@ pub fn take_snapshot(confy_dir: &Path, history_dir: &Path, hooks: &ConfyHooks, s
                     fs::copy(&p, &dest)?;
                     run_hook(hooks, settings, confy_dir, "post_save_version", &p, "save_version", true, tags);
                 }
-            }
         }
     }
     if let Ok(entries) = fs::read_dir(history_dir) {
@@ -523,7 +522,7 @@ pub fn git_clone(confy_dir: &Path, source: &str, destination: Option<&Path>) -> 
     fs::create_dir_all(confy_dir)?;
     if let Some(path) = destination {
         if !path.starts_with(confy_dir) { return Err(ConfyError::PathTraversal(path.to_path_buf())); }
-        if path_exists(&path) {
+        if path_exists(path) {
             return Err(ConfyError::InvalidInput(format!("clone destination already exists: {}", path.display())));
         }
     }
@@ -666,9 +665,8 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
     let base_dir = confy_dir.join(".assets/.deploy_base");
 
     for entry in &manifest.files {
-        if let Some(h) = &entry.host {
-            if let Some(current_host) = host { if h != current_host { continue; } }
-        }
+        if let Some(h) = &entry.host
+            && let Some(current_host) = host && h != current_host { continue; }
         if entry.alias.is_empty() || entry.alias.contains("..") {
             output.push_str(&format!("\n[ERROR] Bad alias: {}\n", entry.alias)); continue;
         }
@@ -786,12 +784,11 @@ pub fn deploy_archive(confy_dir: &Path, archive: &Path, apply: bool, _password: 
     }
 
     if apply { save_deploy_index(&deploy_index, &index_path)?; }
-    if let Some(hd) = &hooks_data {
-        if apply && !hd.is_empty() {
+    if let Some(hd) = &hooks_data
+        && apply && !hd.is_empty() {
             fs::write(bd.join("deployed_hooks.json"), serde_json::to_string_pretty(hd)?)?;
             output.push_str("\n\x1b[1;35m📎 Deployed hooks saved to .assets/.deployments/ for review.\x1b[0m\n");
         }
-    }
     output.push_str(&format!("\nSummary: {} New, {} Updated, {} Skipped, {} Conflicts\n", sum.0, sum.1, sum.2, sum.3));
     if apply { output.push_str("\n\x1b[1;32m✅ Deployed!\x1b[0m\n"); }
     else { output.push_str("\n\x1b[1;33m⚠️ Dry run. Press 'e' to browse archive, 'y' to apply.\x1b[0m\n"); }

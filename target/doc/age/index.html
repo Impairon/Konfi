@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Library for encrypting and decrypting age files"><title>age - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="age" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate age</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../age/index.html">age</a><span class="version">0.11.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#streamlined-apis" title="Streamlined APIs">Streamlined APIs</a></li><li><a href="#passphrase-based-encryption" title="Passphrase-based encryption">Passphrase-based encryption</a></li><li><a href="#full-apis" title="Full APIs">Full APIs</a></li><li><a href="#passphrase-based-encryption-1" title="Passphrase-based encryption">Passphrase-based encryption</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>age</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/age/lib.rs.html#1-456">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><em>Library for encrypting and decrypting age files</em></p>
+<p>This crate implements file encryption according to the <a href="https://age-encryption.org/v1">age-encryption.org/v1</a>
+specification. It generates and consumes encrypted files that are compatible with the
+<a href="https://crates.io/crates/rage">rage</a> CLI tool, as well as the reference <a href="https://filippo.io/age">Go</a> implementation.</p>
+<p>The encryption and decryption APIs are provided by <a href="struct.Encryptor.html" title="struct age::Encryptor"><code>Encryptor</code></a> and <a href="struct.Decryptor.html" title="struct age::Decryptor"><code>Decryptor</code></a>.
+There are several ways to use these:</p>
+<ul>
+<li>For most cases (including programmatic usage), use <a href="struct.Encryptor.html#method.with_recipients" title="associated function age::Encryptor::with_recipients"><code>Encryptor::with_recipients</code></a>
+with <a href="x25519/struct.Recipient.html" title="struct age::x25519::Recipient"><code>x25519::Recipient</code></a>, and <a href="struct.Decryptor.html" title="struct age::Decryptor"><code>Decryptor</code></a> with <a href="x25519/struct.Identity.html" title="struct age::x25519::Identity"><code>x25519::Identity</code></a>.</li>
+<li>For passphrase-based encryption and decryption, use <a href="scrypt/struct.Recipient.html" title="struct age::scrypt::Recipient"><code>scrypt::Recipient</code></a> and
+<a href="scrypt/struct.Identity.html" title="struct age::scrypt::Identity"><code>scrypt::Identity</code></a>, or the helper method <a href="struct.Encryptor.html#method.with_user_passphrase" title="associated function age::Encryptor::with_user_passphrase"><code>Encryptor::with_user_passphrase</code></a>.
+These should only be used with passphrases that were provided by (or generated for)
+a human.</li>
+<li>For compatibility with existing SSH keys, enable the <code>ssh</code> feature flag, and use
+[<code>ssh::Recipient</code>] and [<code>ssh::Identity</code>].</li>
+</ul>
+<p>Age-encrypted files are binary and non-malleable. To encode them as text, use the
+wrapping readers and writers in the [<code>armor</code>] module, behind the <code>armor</code> feature flag.</p>
+<p><em>Caution</em>: all crate versions prior to 1.0 are beta releases for <strong>testing purposes
+only</strong>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="streamlined-apis"><a class="doc-anchor" href="#streamlined-apis">§</a>Streamlined APIs</h3>
+<p>These are useful when you only need to encrypt to a single recipient, and the data is
+small enough to fit in memory.</p>
+<h4 id="recipient-based-encryption"><a class="doc-anchor" href="#recipient-based-encryption">§</a>Recipient-based encryption</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>key = age::x25519::Identity::generate();
+<span class="kw">let </span>pubkey = key.to_public();
+
+<span class="kw">let </span>plaintext = <span class="string">b"Hello world!"</span>;
+
+<span class="kw">let </span>encrypted = age::encrypt(<span class="kw-2">&amp;</span>pubkey, plaintext)<span class="question-mark">?</span>;
+<span class="kw">let </span>decrypted = age::decrypt(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>encrypted)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(decrypted, plaintext);</code></pre></div><h3 id="passphrase-based-encryption"><a class="doc-anchor" href="#passphrase-based-encryption">§</a>Passphrase-based encryption</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>age::secrecy::SecretString;
+
+<span class="kw">let </span>passphrase = SecretString::from(<span class="string">"this is not a good passphrase"</span>.to_owned());
+<span class="kw">let </span>recipient = age::scrypt::Recipient::new(passphrase.clone());
+<span class="kw">let </span>identity = age::scrypt::Identity::new(passphrase);
+
+<span class="kw">let </span>plaintext = <span class="string">b"Hello world!"</span>;
+
+<span class="kw">let </span>encrypted = age::encrypt(<span class="kw-2">&amp;</span>recipient, plaintext)<span class="question-mark">?</span>;
+<span class="kw">let </span>decrypted = age::decrypt(<span class="kw-2">&amp;</span>identity, <span class="kw-2">&amp;</span>encrypted)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(decrypted, plaintext);</code></pre></div><h3 id="full-apis"><a class="doc-anchor" href="#full-apis">§</a>Full APIs</h3>
+<p>The full APIs support encrypting to multiple recipients, streaming the data, and have
+async I/O options.</p>
+<h4 id="recipient-based-encryption-1"><a class="doc-anchor" href="#recipient-based-encryption-1">§</a>Recipient-based encryption</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{Read, Write};
+<span class="kw">use </span>std::iter;
+
+<span class="kw">let </span>key = age::x25519::Identity::generate();
+<span class="kw">let </span>pubkey = key.to_public();
+
+<span class="kw">let </span>plaintext = <span class="string">b"Hello world!"</span>;
+
+<span class="comment">// Encrypt the plaintext to a ciphertext...
+</span><span class="kw">let </span>encrypted = {
+    <span class="kw">let </span>encryptor = age::Encryptor::with_recipients(iter::once(<span class="kw-2">&amp;</span>pubkey <span class="kw">as _</span>))
+        .expect(<span class="string">"we provided a recipient"</span>);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>encrypted = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>writer = encryptor.wrap_output(<span class="kw-2">&amp;mut </span>encrypted)<span class="question-mark">?</span>;
+    writer.write_all(plaintext)<span class="question-mark">?</span>;
+    writer.finish()<span class="question-mark">?</span>;
+
+    encrypted
+};
+
+<span class="comment">// ... and decrypt the obtained ciphertext to the plaintext again.
+</span><span class="kw">let </span>decrypted = {
+    <span class="kw">let </span>decryptor = age::Decryptor::new(<span class="kw-2">&amp;</span>encrypted[..])<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>decrypted = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = decryptor.decrypt(iter::once(<span class="kw-2">&amp;</span>key <span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>age::Identity))<span class="question-mark">?</span>;
+    reader.read_to_end(<span class="kw-2">&amp;mut </span>decrypted);
+
+    decrypted
+};
+
+<span class="macro">assert_eq!</span>(decrypted, plaintext);
+</code></pre></div><h3 id="passphrase-based-encryption-1"><a class="doc-anchor" href="#passphrase-based-encryption-1">§</a>Passphrase-based encryption</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>age::secrecy::SecretString;
+<span class="kw">use </span>std::io::{Read, Write};
+<span class="kw">use </span>std::iter;
+
+<span class="kw">let </span>plaintext = <span class="string">b"Hello world!"</span>;
+<span class="kw">let </span>passphrase = SecretString::from(<span class="string">"this is not a good passphrase"</span>.to_owned());
+
+<span class="comment">// Encrypt the plaintext to a ciphertext using the passphrase...
+</span><span class="kw">let </span>encrypted = {
+    <span class="kw">let </span>encryptor = age::Encryptor::with_user_passphrase(passphrase.clone());
+
+    <span class="kw">let </span><span class="kw-2">mut </span>encrypted = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>writer = encryptor.wrap_output(<span class="kw-2">&amp;mut </span>encrypted)<span class="question-mark">?</span>;
+    writer.write_all(plaintext)<span class="question-mark">?</span>;
+    writer.finish()<span class="question-mark">?</span>;
+
+    encrypted
+};
+
+<span class="comment">// ... and decrypt the ciphertext to the plaintext again using the same passphrase.
+</span><span class="kw">let </span>decrypted = {
+    <span class="kw">let </span>decryptor = age::Decryptor::new(<span class="kw-2">&amp;</span>encrypted[..])<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>decrypted = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = decryptor.decrypt(iter::once(<span class="kw-2">&amp;</span>age::scrypt::Identity::new(passphrase) <span class="kw">as _</span>))<span class="question-mark">?</span>;
+    reader.read_to_end(<span class="kw-2">&amp;mut </span>decrypted);
+
+    decrypted
+};
+
+<span class="macro">assert_eq!</span>(decrypted, plaintext);</code></pre></div></div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.secrecy"><code>pub use age_core::secrecy;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="encrypted/index.html" title="mod age::encrypted">encrypted</a></dt><dd>The “encrypted age identity file” identity type.</dd><dt><a class="mod" href="scrypt/index.html" title="mod age::scrypt">scrypt</a></dt><dd>The “scrypt” passphrase-based recipient type, native to age.</dd><dt><a class="mod" href="stream/index.html" title="mod age::stream">stream</a></dt><dd>I/O helper structs for age file encryption and decryption.</dd><dt><a class="mod" href="x25519/index.html" title="mod age::x25519">x25519</a></dt><dd>The “x25519” recipient type, native to age.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Decryptor.html" title="struct age::Decryptor">Decryptor</a></dt><dd>Decryptor for an age file.</dd><dt><a class="struct" href="struct.Encryptor.html" title="struct age::Encryptor">Encryptor</a></dt><dd>Encryptor for creating an age file.</dd><dt><a class="struct" href="struct.IdentityFile.html" title="struct age::IdentityFile">Identity<wbr>File</a></dt><dd>A list of identities that has been parsed from some input file.</dd><dt><a class="struct" href="struct.NoCallbacks.html" title="struct age::NoCallbacks">NoCallbacks</a></dt><dd>An implementation of <a href="trait.Callbacks.html" title="trait age::Callbacks"><code>Callbacks</code></a> that does not allow callbacks.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.DecryptError.html" title="enum age::DecryptError">Decrypt<wbr>Error</a></dt><dd>The various errors that can be returned during the decryption process.</dd><dt><a class="enum" href="enum.EncryptError.html" title="enum age::EncryptError">Encrypt<wbr>Error</a></dt><dd>The various errors that can be returned during the encryption process.</dd><dt><a class="enum" href="enum.IdentityFileConvertError.html" title="enum age::IdentityFileConvertError">Identity<wbr>File<wbr>Convert<wbr>Error</a></dt><dd>Errors returned when converting an identity file to a recipients file.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Callbacks.html" title="trait age::Callbacks">Callbacks</a></dt><dd>Callbacks that might be triggered during encryption or decryption.</dd><dt><a class="trait" href="trait.Identity.html" title="trait age::Identity">Identity</a></dt><dd>A private key or other value that can unwrap an opaque file key from a recipient
+stanza.</dd><dt><a class="trait" href="trait.Recipient.html" title="trait age::Recipient">Recipient</a></dt><dd>A public key or other value that can wrap an opaque file key to a recipient stanza.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.decrypt.html" title="fn age::decrypt">decrypt</a></dt><dd>Decrypts the given ciphertext with the given identity.</dd><dt><a class="fn" href="fn.encrypt.html" title="fn age::encrypt">encrypt</a></dt><dd>Encrypts the given plaintext to the given recipient.</dd><dt><a class="fn" href="fn.localizer.html" title="fn age::localizer">localizer</a></dt><dd>Returns the [<code>Localizer</code>] to be used for localizing this library.</dd></dl></section></div></main></body></html>
