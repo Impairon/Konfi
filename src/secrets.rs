@@ -187,7 +187,7 @@ pub fn compile_rules(rules: &[SecretRule]) -> Result<GlobSet> {
     for rule in rules {
         builder.add(Glob::new(&rule.glob).map_err(|e| ConfyError::InvalidInput(format!("bad secret glob '{}': {}", rule.glob, e)))?);
     }
-    Ok(builder.build().map_err(|e| ConfyError::InvalidInput(format!("bad secret rule set: {}", e)))?)
+    builder.build().map_err(|e| ConfyError::InvalidInput(format!("bad secret rule set: {}", e)))
 }
 
 pub fn matches(globs: &GlobSet, rel: &str) -> bool {
@@ -267,7 +267,7 @@ pub fn scan_plaintext(root: &Path) -> Vec<Finding> {
     for path in walk_plaintext_candidates(root) {
         let rel = path.strip_prefix(root).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
         let Ok(bytes) = fs::read(&path) else { continue; };
-        if bytes.is_empty() || bytes.iter().any(|b| *b == 0) || bytes.len() > 2 * 1024 * 1024 { continue; }
+        if bytes.is_empty() || bytes.contains(&0) || bytes.len() > 2 * 1024 * 1024 { continue; }
         let text = String::from_utf8_lossy(&bytes);
         for (idx, line) in text.lines().enumerate() {
             for (kind, regex) in secret_patterns() {
@@ -339,10 +339,10 @@ impl SecretsManager {
             self.cfg.recipients.push(SecretRecipient { label: label.to_string(), key: public.clone() });
             self.save()?;
         }
-        let mut store = load_key_store(&self.keys_dir.parent().and_then(|p| p.parent()).unwrap_or(&self.keys_dir));
+        let mut store = load_key_store(self.keys_dir.parent().and_then(|p| p.parent()).unwrap_or(&self.keys_dir));
         store.generated.retain(|k| k.name != label);
         store.generated.push(NamedKey { name: label.to_string(), key: public.clone() });
-        save_key_store(&self.keys_dir.parent().and_then(|p| p.parent()).unwrap_or(&self.keys_dir), &store)?;
+        save_key_store(self.keys_dir.parent().and_then(|p| p.parent()).unwrap_or(&self.keys_dir), &store)?;
         Ok(public)
     }
 
@@ -402,17 +402,17 @@ pub fn validate_identity(s: &str) -> Option<String> {
 }
 
 pub fn encrypt_with_recipients(plaintext: &[u8], recipients: &[String]) -> Result<Vec<u8>> {
-    let mut valid = Vec::new();
+    let mut valid: Vec<Box<dyn age::Recipient + Send>> = Vec::new();
     for recipient in recipients {
         let s = recipient.trim();
         if s.is_empty() || s.starts_with('#') { continue; }
         let rec = age::x25519::Recipient::from_str(s).map_err(|e| ConfyError::InvalidInput(format!("bad age recipient: {}", e)))?;
-        valid.push(rec);
+        valid.push(Box::new(rec));
     }
     if valid.is_empty() {
         return Err(ConfyError::InvalidInput("no valid age recipients configured".into()));
     }
-    let enc = age::Encryptor::with_recipients(valid.iter().map(|r| r as &dyn age::Recipient)).map_err(|e| ConfyError::Crypto(format!("encrypt: {}", e)))?;
+    let enc = age::Encryptor::with_recipients(valid.iter().map(|r| r.as_ref() as &dyn age::Recipient)).map_err(|e| ConfyError::Crypto(format!("encrypt: {}", e)))?;
     let mut out = Vec::new();
     let mut writer = enc.wrap_output(&mut out).map_err(|e| ConfyError::Crypto(format!("wrap_output: {}", e)))?;
     writer.write_all(plaintext)?;
@@ -431,23 +431,24 @@ pub fn encrypt_with_passphrase(plaintext: &[u8], passphrase: &str) -> Result<Vec
 }
 
 pub fn decrypt_with_identities(ciphertext: &[u8], identities: &[String]) -> Result<Vec<u8>> {
-    let mut ids = Vec::new();
+    let mut ids: Vec<Box<dyn age::Identity + Send>> = Vec::new();
     for s in identities {
         for line in s.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') { continue; }
             let id = age::x25519::Identity::from_str(line).map_err(|e| ConfyError::InvalidInput(format!("bad age identity: {}", e)))?;
-            ids.push(id);
+            ids.push(Box::new(id));
         }
     }
     if ids.is_empty() {
         return Err(ConfyError::InvalidInput("no age identities available".into()));
     }
     let decryptor = age::Decryptor::new(ciphertext).map_err(|e| ConfyError::Crypto(format!("decrypt: {}", e)))?;
+    // Check if this is scrypt-encrypted (passphrase-based)
     if decryptor.is_scrypt() {
         return Err(ConfyError::Crypto("encrypted with passphrase, not private keys".into()));
     }
-    let mut reader = decryptor.decrypt(ids.iter().map(|i| i as &dyn age::Identity)).map_err(|_| ConfyError::Crypto("no matching age identity for encrypted file".into()))?;
+    let mut reader = decryptor.decrypt(ids.iter().map(|i| i.as_ref() as &dyn age::Identity)).map_err(|_| ConfyError::Crypto("no matching age identity for encrypted file".into()))?;
     let mut out = Vec::new();
     reader.read_to_end(&mut out)?;
     Ok(out)
@@ -468,7 +469,6 @@ pub fn decrypt_with_passphrase(ciphertext: &[u8], passphrase: &str) -> Result<Ve
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn round_trip_key_encryption_works() {
@@ -481,7 +481,7 @@ mod tests {
         fs::write(&plain, "api_key: test\n").unwrap();
         let enc = encrypt_with_recipients(b"api_key: test\n", &[public.clone()]).unwrap();
         assert!(enc.starts_with(b"age-encryption.org/v1"));
-        let identity = manager.list_identities().into_iter().map(|(_, value)| value).collect::<Vec<_>>();
+        let identity = manager.identities_raw().into_iter().map(|(_, value)| value.to_string()).collect::<Vec<_>>();
         let plain = decrypt_with_identities(&enc, &identity).unwrap();
         assert_eq!(plain, b"api_key: test\n");
         let _ = fs::remove_dir_all(&root);
